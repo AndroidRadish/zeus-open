@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { X, GitBranch, FileText, Clock, Activity, Target, AlignLeft } from 'lucide-vue-next'
+import { X, GitBranch, FileText, Clock, Activity, Target, AlignLeft, BarChart3, ScrollText } from 'lucide-vue-next'
 
 const { t } = useI18n()
 
@@ -21,6 +21,8 @@ export interface TaskDetail {
   heartbeat_at?: string
   milestone_id?: string
   type?: string
+  latest_progress?: any
+  latest_events?: any[]
   [key: string]: any
 }
 
@@ -33,11 +35,39 @@ const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
+const activeTab = ref<'details' | 'logs'>('details')
+const logsContent = ref('')
+const logsLoading = ref(false)
+
 watch(() => props.open, (val) => {
   if (typeof document !== 'undefined') {
     document.body.style.overflow = val ? 'hidden' : ''
   }
+  if (val && props.task) {
+    activeTab.value = 'details'
+    loadLogs()
+  }
 })
+
+watch(() => props.task?.id, () => {
+  if (props.open && props.task) {
+    loadLogs()
+  }
+})
+
+async function loadLogs() {
+  if (!props.task) return
+  logsLoading.value = true
+  try {
+    const base = import.meta.env.VITE_API_BASE || ''
+    const res = await fetch(`${base}/tasks/${props.task.id}/logs`)
+    logsContent.value = res.ok ? await res.text() : 'Failed to load logs.'
+  } catch {
+    logsContent.value = 'Failed to load logs.'
+  } finally {
+    logsLoading.value = false
+  }
+}
 
 function onClose() {
   emit('close')
@@ -46,6 +76,24 @@ function onClose() {
 function statusClass(status: string) {
   return `status-${status || 'pending'}`
 }
+
+function progressPercent(task: TaskDetail): number {
+  return task.latest_progress?.payload?.percent || 0
+}
+
+function progressStep(task: TaskDetail): string {
+  return task.latest_progress?.payload?.step || ''
+}
+
+function progressMessages(task: TaskDetail): string[] {
+  if (!task.latest_events) return []
+  return task.latest_events
+    .filter((e: any) => e.event_type === 'task.progress')
+    .slice(0, 3)
+    .map((e: any) => e.payload?.message || e.payload?.step || '')
+}
+
+
 </script>
 
 <template>
@@ -68,70 +116,114 @@ function statusClass(status: string) {
         </div>
 
         <div v-if="task" class="drawer-body custom-scrollbar">
-          <div class="detail-block">
-            <div class="block-label"><AlignLeft :size="14" /> {{ t('tasks.titleCol') }}</div>
-            <div class="block-value">{{ task.title || t('tasks.unnamed') }}</div>
-          </div>
-
-          <div v-if="task.description" class="detail-block">
-            <div class="block-label"><AlignLeft :size="14" /> {{ t('tasks.description') }}</div>
-            <div class="block-value text-secondary">{{ task.description }}</div>
-          </div>
-
-          <div class="detail-grid">
-            <div class="detail-block">
-              <div class="block-label"><Activity :size="14" /> {{ t('tasks.result') }}</div>
-              <div class="block-value">
-                <span class="result-pill" :class="task.passes ? 'pass' : 'fail'">
-                  {{ task.passes ? t('result.pass') : t('result.fail') }}
-                </span>
+          <!-- Progress block -->
+          <div v-if="task.status === 'running' && task.latest_progress" class="detail-block progress-block">
+            <div class="block-label"><BarChart3 :size="14" /> {{ t('tasks.progress') }}</div>
+            <div class="progress-row">
+              <span class="progress-step">{{ progressStep(task) || t('tasks.progress') }}</span>
+              <span class="progress-percent">{{ progressPercent(task) }}%</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill" :style="{ width: progressPercent(task) + '%' }"></div>
+            </div>
+            <div v-if="progressMessages(task).length" class="progress-messages">
+              <div v-for="(msg, i) in progressMessages(task)" :key="i" class="progress-msg">
+                {{ msg }}
               </div>
             </div>
+          </div>
+
+          <!-- Tabs -->
+          <div class="detail-tabs">
+            <button
+              class="tab-btn"
+              :class="{ active: activeTab === 'details' }"
+              @click="activeTab = 'details'"
+            >
+              <AlignLeft :size="13" /> {{ t('tasks.detail') }}
+            </button>
+            <button
+              class="tab-btn"
+              :class="{ active: activeTab === 'logs' }"
+              @click="activeTab = 'logs'"
+            >
+              <ScrollText :size="13" /> {{ t('tasks.logs') }}
+            </button>
+          </div>
+
+          <!-- Details tab -->
+          <div v-if="activeTab === 'details'" class="tab-content">
             <div class="detail-block">
-              <div class="block-label"><Target :size="14" /> {{ t('tasks.wave') }}</div>
-              <div class="block-value mono">{{ task.wave ?? '-' }}</div>
+              <div class="block-label"><AlignLeft :size="14" /> {{ t('tasks.titleCol') }}</div>
+              <div class="block-value">{{ task.title || t('tasks.unnamed') }}</div>
             </div>
-            <div v-if="task.scheduled_wave !== undefined" class="detail-block">
-              <div class="block-label"><Target :size="14" /> {{ t('tasks.scheduledWave') }}</div>
-              <div class="block-value mono">{{ task.scheduled_wave }}</div>
+
+            <div v-if="task.description" class="detail-block">
+              <div class="block-label"><AlignLeft :size="14" /> {{ t('tasks.description') }}</div>
+              <div class="block-value text-secondary">{{ task.description }}</div>
             </div>
-            <div v-if="task.rescheduled_from !== undefined" class="detail-block">
-              <div class="block-label"><Target :size="14" /> {{ t('tasks.rescheduledFrom') }}</div>
-              <div class="block-value mono">{{ task.rescheduled_from }}</div>
+
+            <div class="detail-grid">
+              <div class="detail-block">
+                <div class="block-label"><Activity :size="14" /> {{ t('tasks.result') }}</div>
+                <div class="block-value">
+                  <span class="result-pill" :class="task.passes ? 'pass' : 'fail'">
+                    {{ task.passes ? t('result.pass') : t('result.fail') }}
+                  </span>
+                </div>
+              </div>
+              <div class="detail-block">
+                <div class="block-label"><Target :size="14" /> {{ t('tasks.wave') }}</div>
+                <div class="block-value mono">{{ task.wave ?? '-' }}</div>
+              </div>
+              <div v-if="task.scheduled_wave !== undefined" class="detail-block">
+                <div class="block-label"><Target :size="14" /> {{ t('tasks.scheduledWave') }}</div>
+                <div class="block-value mono">{{ task.scheduled_wave }}</div>
+              </div>
+              <div v-if="task.rescheduled_from !== undefined" class="detail-block">
+                <div class="block-label"><Target :size="14" /> {{ t('tasks.rescheduledFrom') }}</div>
+                <div class="block-value mono">{{ task.rescheduled_from }}</div>
+              </div>
+            </div>
+
+            <div v-if="task.depends_on?.length" class="detail-block">
+              <div class="block-label"><GitBranch :size="14" /> {{ t('tasks.dependsOn') }}</div>
+              <div class="tag-list">
+                <span v-for="d in task.depends_on" :key="d" class="tag mono">{{ d }}</span>
+              </div>
+            </div>
+
+            <div v-if="task.files?.length" class="detail-block">
+              <div class="block-label"><FileText :size="14" /> {{ t('tasks.files') }}</div>
+              <ul class="file-list">
+                <li v-for="f in task.files" :key="f" class="file-item mono">{{ f }}</li>
+              </ul>
+            </div>
+
+            <div class="detail-grid">
+              <div v-if="task.commit_sha" class="detail-block">
+                <div class="block-label"><Activity :size="14" /> {{ t('tasks.commitSha') }}</div>
+                <div class="block-value mono">{{ task.commit_sha }}</div>
+              </div>
+              <div v-if="task.worker_id" class="detail-block">
+                <div class="block-label"><Activity :size="14" /> {{ t('tasks.worker') }}</div>
+                <div class="block-value mono">{{ task.worker_id }}</div>
+              </div>
+              <div v-if="task.heartbeat_at" class="detail-block">
+                <div class="block-label"><Clock :size="14" /> {{ t('tasks.heartbeat') }}</div>
+                <div class="block-value mono">{{ new Date(task.heartbeat_at).toLocaleString() }}</div>
+              </div>
+              <div v-if="task.milestone_id" class="detail-block">
+                <div class="block-label"><Target :size="14" /> {{ t('tasks.milestone') }}</div>
+                <div class="block-value mono">{{ task.milestone_id }}</div>
+              </div>
             </div>
           </div>
 
-          <div v-if="task.depends_on?.length" class="detail-block">
-            <div class="block-label"><GitBranch :size="14" /> {{ t('tasks.dependsOn') }}</div>
-            <div class="tag-list">
-              <span v-for="d in task.depends_on" :key="d" class="tag mono">{{ d }}</span>
-            </div>
-          </div>
-
-          <div v-if="task.files?.length" class="detail-block">
-            <div class="block-label"><FileText :size="14" /> {{ t('tasks.files') }}</div>
-            <ul class="file-list">
-              <li v-for="f in task.files" :key="f" class="file-item mono">{{ f }}</li>
-            </ul>
-          </div>
-
-          <div class="detail-grid">
-            <div v-if="task.commit_sha" class="detail-block">
-              <div class="block-label"><Activity :size="14" /> {{ t('tasks.commitSha') }}</div>
-              <div class="block-value mono">{{ task.commit_sha }}</div>
-            </div>
-            <div v-if="task.worker_id" class="detail-block">
-              <div class="block-label"><Activity :size="14" /> {{ t('tasks.worker') }}</div>
-              <div class="block-value mono">{{ task.worker_id }}</div>
-            </div>
-            <div v-if="task.heartbeat_at" class="detail-block">
-              <div class="block-label"><Clock :size="14" /> {{ t('tasks.heartbeat') }}</div>
-              <div class="block-value mono">{{ new Date(task.heartbeat_at).toLocaleString() }}</div>
-            </div>
-            <div v-if="task.milestone_id" class="detail-block">
-              <div class="block-label"><Target :size="14" /> {{ t('tasks.milestone') }}</div>
-              <div class="block-value mono">{{ task.milestone_id }}</div>
-            </div>
+          <!-- Logs tab -->
+          <div v-if="activeTab === 'logs'" class="tab-content">
+            <div v-if="logsLoading" class="logs-loading">{{ t('tasks.loadingLogs') }}</div>
+            <pre v-else class="logs-pre">{{ logsContent || t('tasks.noLogs') }}</pre>
           </div>
         </div>
 
@@ -316,6 +408,102 @@ function statusClass(status: string) {
   border-bottom: 1px solid rgba(255,255,255,0.04);
 }
 .file-item:last-child { border-bottom: none; }
+
+.progress-block {
+  background: rgba(34,211,238,0.06);
+  border-color: rgba(34,211,238,0.15);
+}
+.progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+.progress-step {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--z-accent-cyan);
+  text-transform: capitalize;
+}
+.progress-percent {
+  font-size: 0.8rem;
+  color: var(--z-text-secondary);
+  font-family: var(--font-mono);
+}
+.progress-track {
+  height: 6px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--z-accent-cyan), #22d3ee);
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+.progress-messages {
+  margin-top: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.progress-msg {
+  font-size: 0.8rem;
+  color: #cbd5e1;
+  padding: 0.25rem 0;
+}
+
+.detail-tabs {
+  display: flex;
+  gap: 0.35rem;
+  border-bottom: 1px solid var(--z-border);
+  margin-bottom: 0.5rem;
+}
+.tab-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--z-text-secondary);
+  font-size: 0.8rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s ease;
+}
+.tab-btn:hover { color: #e2e8f0; }
+.tab-btn.active {
+  color: var(--z-accent-cyan);
+  border-bottom-color: var(--z-accent-cyan);
+}
+
+.tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.logs-loading {
+  color: var(--z-text-secondary);
+  font-size: 0.9rem;
+  padding: 1rem 0;
+}
+.logs-pre {
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 0.5rem;
+  padding: 0.85rem 1rem;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: #cbd5e1;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 360px;
+  overflow-y: auto;
+}
 
 /* Transitions */
 .drawer-enter-active,

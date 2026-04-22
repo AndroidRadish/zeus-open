@@ -49,7 +49,11 @@
     "scheduledWave": "Scheduled wave",
     "rescheduledFrom": "Rescheduled from",
     "milestone": "Milestone",
-    "description": "Description"
+    "description": "Description",
+    "progress": "Progress",
+    "logs": "Logs",
+    "loadingLogs": "Loading logs…",
+    "noLogs": "No logs available"
   },
   "status": {
     "pending": "Pending",
