@@ -16,8 +16,7 @@ ZeusOpen v3 是对 v2 执行引擎的彻底重写，核心目标包括：
 ### 本地一键运行完整流水线
 
 ```bash
-cd .zeus/v3/scripts
-python run.py --project-root . --max-workers 3
+python .zeus/v3/scripts/run.py --project-root . --max-workers 3
 ```
 
 执行流程：导入 `task.json` → 启动调度器 + 工作器池 → 运行到全部完成 → 输出摘要。
@@ -25,7 +24,7 @@ python run.py --project-root . --max-workers 3
 ### 启动 API 服务器 + 仪表板
 
 ```bash
-python run.py --mode serve --project-root . --host 0.0.0.0 --port 8000
+python .zeus/v3/scripts/run.py --mode serve --project-root . --host 0.0.0.0 --port 8000
 ```
 
 浏览器打开 http://127.0.0.1:8000/dashboard
@@ -42,7 +41,7 @@ python run.py --mode serve --project-root . --host 0.0.0.0 --port 8000
 ### 不执行，只看状态
 
 ```bash
-python run.py --status
+python .zeus/v3/scripts/run.py --status
 ```
 
 ---
@@ -62,24 +61,24 @@ python run.py --status
 
 终端 1：
 ```bash
-python run.py --mode scheduler
+python .zeus/v3/scripts/run.py --mode scheduler
 ```
 
 终端 2：
 ```bash
-python run.py --mode worker --max-workers 2
+python .zeus/v3/scripts/run.py --mode worker --max-workers 2
 ```
 
 ### Redis 分布式示例
 
 终端 1（调度器）：
 ```bash
-python run.py --mode scheduler --queue-backend redis --redis-url redis://localhost:6379/0
+python .zeus/v3/scripts/run.py --mode scheduler --queue-backend redis --redis-url redis://localhost:6379/0
 ```
 
 终端 2-N（工作器）：
 ```bash
-python run.py --mode worker --max-workers 3 --queue-backend redis --redis-url redis://localhost:6379/0
+python .zeus/v3/scripts/run.py --mode worker --max-workers 3 --queue-backend redis --redis-url redis://localhost:6379/0
 ```
 
 ---
@@ -106,7 +105,7 @@ python run.py --mode worker --max-workers 3 --queue-backend redis --redis-url re
 }
 ```
 
-执行 `python run.py --import-only` 可仅导入不执行。
+执行 `python .zeus/v3/scripts/run.py --import-only` 可仅导入不执行。
 
 ---
 
@@ -291,7 +290,7 @@ msg = await bus.recv("zeus-agent-T-2", timeout=5.0)
 启用控制台链路导出：
 
 ```bash
-python run.py --trace
+python .zeus/v3/scripts/run.py --trace
 ```
 
 每次调度器运行会产生一个 `scheduler-run` span，包含子级 `scheduler-tick` span。
@@ -366,17 +365,16 @@ python -m pytest tests/ -v
 
 2. 创建 `.zeus/v3/task.json`，写入初始任务计划（可参考 `.zeus/v3/templates/high-concurrency-task-plan.json`）。
 
-3. **运行 `python run.py --import-only` 生成 `state.db`**。这一步是**必需的**——如果不执行，`--status` 和调度器都无法正常工作。
+3. **运行 `python .zeus/v3/scripts/run.py --import-only` 生成 `state.db`**。这一步是**必需的**——如果不执行，`--status` 和调度器都无法正常工作。
 
 ```bash
-cd .zeus/v3/scripts
-python run.py --project-root . --import-only
+python .zeus/v3/scripts/run.py --project-root . --import-only
 ```
 
 4. 验证初始化结果：
 
 ```bash
-python run.py --status
+python .zeus/v3/scripts/run.py --status
 ```
 
 你应该能看到数据库中的任务计数，而不是 "No tasks found"。
@@ -385,15 +383,15 @@ python run.py --status
 
 ```bash
 # 执行所有待办任务
-python run.py --project-root . --max-workers 3
+python .zeus/v3/scripts/run.py --project-root . --max-workers 3
 
 # 或启动 API 服务器 + 控制台
-python run.py --mode serve --project-root . --host 0.0.0.0 --port 8000
+python .zeus/v3/scripts/run.py --mode serve --project-root . --host 0.0.0.0 --port 8000
 ```
 
 ## 从 v2 迁移
 
 1. 将 v2 的 `task.json` 复制到 `.zeus/v3/task.json`
-2. 运行 `python run.py --import-only` 将运行时状态迁移到 v3 数据库
+2. 运行 `python .zeus/v3/scripts/run.py --import-only` 将运行时状态迁移到 v3 数据库
 3. 启动调度器 / 工作器或 Docker Compose 集群
 4. 打开 `/dashboard` 进行实时监控

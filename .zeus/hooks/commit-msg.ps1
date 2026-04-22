@@ -31,8 +31,8 @@ Write-Host ""
 Write-Host "你的提交信息：$CommitMsg"
 Write-Host ""
 Write-Host "正确格式："
-Write-Host "  任务 commit：{type}(T-{NNN}): {描述}"
-Write-Host "  系统 commit：{type}(zeus): {描述}"
+Write-Host '  任务 commit：{type}(T-{NNN}): {描述}'
+Write-Host '  系统 commit：{type}(zeus): {描述}'
 Write-Host ""
 Write-Host "type 可选：feat / fix / docs / chore / test / refactor"
 Write-Host ""

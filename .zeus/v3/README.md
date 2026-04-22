@@ -16,8 +16,7 @@ ZeusOpen v3 is a ground-up rewrite of the v2 execution engine, focused on:
 ### One-liner: run everything locally
 
 ```bash
-cd .zeus/v3/scripts
-python run.py --project-root . --max-workers 3
+python .zeus/v3/scripts/run.py --project-root . --max-workers 3
 ```
 
 This imports `task.json`, starts the scheduler + worker pool, runs until completion, and prints a summary.
@@ -25,7 +24,7 @@ This imports `task.json`, starts the scheduler + worker pool, runs until complet
 ### Start the API server + Dashboard
 
 ```bash
-python run.py --mode serve --project-root . --host 0.0.0.0 --port 8000
+python .zeus/v3/scripts/run.py --mode serve --project-root . --host 0.0.0.0 --port 8000
 ```
 
 Open http://127.0.0.1:8000/dashboard
@@ -47,7 +46,7 @@ The dashboard includes:
 ### Check status without running
 
 ```bash
-python run.py --status
+python .zeus/v3/scripts/run.py --status
 ```
 
 ---
@@ -67,24 +66,24 @@ python run.py --status
 
 Terminal 1:
 ```bash
-python run.py --mode scheduler
+python .zeus/v3/scripts/run.py --mode scheduler
 ```
 
 Terminal 2:
 ```bash
-python run.py --mode worker --max-workers 2
+python .zeus/v3/scripts/run.py --mode worker --max-workers 2
 ```
 
 ### Redis-backed distributed example
 
 Terminal 1 (scheduler):
 ```bash
-python run.py --mode scheduler --queue-backend redis --redis-url redis://localhost:6379/0
+python .zeus/v3/scripts/run.py --mode scheduler --queue-backend redis --redis-url redis://localhost:6379/0
 ```
 
 Terminal 2-N (workers):
 ```bash
-python run.py --mode worker --max-workers 3 --queue-backend redis --redis-url redis://localhost:6379/0
+python .zeus/v3/scripts/run.py --mode worker --max-workers 3 --queue-backend redis --redis-url redis://localhost:6379/0
 ```
 
 ---
@@ -111,7 +110,7 @@ Tasks are defined in `.zeus/v3/task.json` (static plan) and imported into the da
 }
 ```
 
-Run `python run.py --import-only` to import without executing.
+Run `python .zeus/v3/scripts/run.py --import-only` to import without executing.
 
 ---
 
@@ -296,7 +295,7 @@ Messages are persisted in the database and browsable via the Dashboard **Mailbox
 Enable console trace export:
 
 ```bash
-python run.py --trace
+python .zeus/v3/scripts/run.py --trace
 ```
 
 Each scheduler run produces a `scheduler-run` span with child `scheduler-tick` spans.
@@ -371,17 +370,16 @@ For a brand-new project that does not have a v2 history:
 
 2. Create `.zeus/v3/task.json` with your initial task plan (use `.zeus/v3/templates/high-concurrency-task-plan.json` as a reference).
 
-3. **Run `python run.py --import-only` to generate `state.db`**. This step is mandatory — without it, `--status` and the scheduler will not work.
+3. **Run `python .zeus/v3/scripts/run.py --import-only` to generate `state.db`**. This step is mandatory — without it, `--status` and the scheduler will not work.
 
 ```bash
-cd .zeus/v3/scripts
-python run.py --project-root . --import-only
+python .zeus/v3/scripts/run.py --project-root . --import-only
 ```
 
 4. Verify initialization:
 
 ```bash
-python run.py --status
+python .zeus/v3/scripts/run.py --status
 ```
 
 You should see task counts from the database, not "No tasks found".
@@ -390,15 +388,15 @@ You should see task counts from the database, not "No tasks found".
 
 ```bash
 # Run all pending tasks
-python run.py --project-root . --max-workers 3
+python .zeus/v3/scripts/run.py --project-root . --max-workers 3
 
 # Or start the API server + Dashboard
-python run.py --mode serve --project-root . --host 0.0.0.0 --port 8000
+python .zeus/v3/scripts/run.py --mode serve --project-root . --host 0.0.0.0 --port 8000
 ```
 
 ## Migration from v2
 
 1. Copy your v2 `task.json` into `.zeus/v3/task.json`
-2. Run `python run.py --import-only` to migrate runtime state into the v3 database
+2. Run `python .zeus/v3/scripts/run.py --import-only` to migrate runtime state into the v3 database
 3. Start the scheduler / workers or Docker Compose stack
 4. Open `/dashboard` for real-time monitoring

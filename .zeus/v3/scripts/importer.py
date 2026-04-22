@@ -9,6 +9,7 @@ v3 design:
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -19,8 +20,11 @@ from store.base import AsyncStateStore
 _STATIC_TASK_FIELDS = {
     "id", "story_id", "title", "description", "wave", "original_wave",
     "scheduled_wave", "rescheduled_from", "depends_on", "ai_log_ref",
-    "files", "milestone_id", "extra", "created_at",
+    "files", "milestone_id", "extra", "created_at", "updated_at",
 }
+
+# ISO 日期字段：导入前需要解析为 datetime 对象
+_DATE_TASK_FIELDS = {"created_at", "updated_at", "heartbeat_at"}
 
 
 async def import_tasks_from_json(store: AsyncStateStore, task_json_path: Path | str) -> dict[str, Any]:
@@ -51,6 +55,8 @@ async def import_tasks_from_json(store: AsyncStateStore, task_json_path: Path | 
             task_state: dict[str, Any] = {k: existing[k] for k in ("status", "passes", "commit_sha", "worker_id") if k in existing}
             extra: dict[str, Any] = {}
             for k, v in t.items():
+                if k in _DATE_TASK_FIELDS and isinstance(v, str):
+                    v = datetime.fromisoformat(v)
                 if k in _STATIC_TASK_FIELDS:
                     task_state[k] = v
                 elif k not in ("status", "passes", "commit_sha", "worker_id", "heartbeat_at"):
@@ -70,6 +76,8 @@ async def import_tasks_from_json(store: AsyncStateStore, task_json_path: Path | 
             }
             extra = {}
             for k, v in t.items():
+                if k in _DATE_TASK_FIELDS and isinstance(v, str):
+                    v = datetime.fromisoformat(v)
                 if k in _STATIC_TASK_FIELDS:
                     task_state[k] = v
                 elif k not in ("status", "passes", "commit_sha", "worker_id", "heartbeat_at"):

@@ -137,6 +137,37 @@ async def test_import_preserves_extra_fields(sqlite_store, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_import_parses_iso_datetime_strings(sqlite_store, tmp_path):
+    """Regression test: ISO date strings in task.json must be parsed to datetime before upsert."""
+    store = sqlite_store
+    task_json = {
+        "meta": {},
+        "tasks": [
+            {
+                "id": "T-105",
+                "title": "Task with dates",
+                "status": "pending",
+                "wave": 1,
+                "depends_on": [],
+                "created_at": "2026-04-22T14:00:00+08:00",
+                "updated_at": "2026-04-22T15:30:00+08:00",
+            },
+        ],
+        "quarantine": [],
+    }
+    path = tmp_path / "task.json"
+    path.write_text(json.dumps(task_json), encoding="utf-8")
+    # Must not raise TypeError: SQLite DateTime type only accepts Python datetime and date objects
+    result = await import_tasks_from_json(store, path)
+    assert result["imported_tasks"] == 1
+
+    t = await store.get_task("T-105")
+    # Store serializes datetime back to ISO string; verify round-trip correctness
+    assert t["created_at"].startswith("2026-04-22")
+    assert t["updated_at"].startswith("2026-04-22")
+
+
+@pytest.mark.asyncio
 async def test_import_phases_and_milestones(sqlite_store, tmp_path):
     store = sqlite_store
     task_json = {
