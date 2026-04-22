@@ -296,9 +296,16 @@ def create_app(
 
     @app.get("/tasks/{task_id}")
     async def get_task(request: FastAPIRequest, task_id: str) -> dict[str, Any]:
-        task = await request.app.state.store.get_task(task_id)
+        store = request.app.state.store
+        task = await store.get_task(task_id)
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
+        # Attach latest progress + recent events for Dashboard observability
+        progress_events = await store.query_events(task_id=task_id, event_type="task.progress", limit=1)
+        if progress_events:
+            task["latest_progress"] = progress_events[0]
+        recent_events = await store.query_events(task_id=task_id, limit=5)
+        task["latest_events"] = recent_events
         return task
 
     @app.post("/tasks")
@@ -419,6 +426,10 @@ def create_app(
     # ------------------------------------------------------------------
     # Events
     # ------------------------------------------------------------------
+    @app.get("/workers")
+    async def list_workers(request: FastAPIRequest) -> list[dict[str, Any]]:
+        return await request.app.state.store.list_active_workers()
+
     @app.get("/events")
     async def list_events(
         request: FastAPIRequest,

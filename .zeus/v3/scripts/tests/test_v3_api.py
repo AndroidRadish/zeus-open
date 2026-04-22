@@ -639,6 +639,48 @@ async def test_task_logs_from_workspace(api_client, sqlite_store, tmp_path):
     assert "Workspace activity" in resp.text
 
 
+@pytest.mark.asyncio
+async def test_task_detail_includes_progress_and_events(api_client, sqlite_store):
+    """/tasks/{id} should include latest_progress and latest_events."""
+    client, _ = api_client
+    await sqlite_store.upsert_task({"id": "T-PROG-1", "status": "running", "wave": 1, "depends_on": [], "worker_id": "w-1"})
+    await sqlite_store.log_event("task.progress", "T-PROG-1", payload={"step": "writing", "percent": 42})
+    await sqlite_store.log_event("task.started", "T-PROG-1", payload={"message": "go"})
+
+    resp = await client.get("/tasks/T-PROG-1")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "latest_progress" in data
+    assert data["latest_progress"]["payload"]["step"] == "writing"
+    assert "latest_events" in data
+    assert len(data["latest_events"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_workers_list(api_client, sqlite_store):
+    """/workers should return active workers from running tasks."""
+    client, _ = api_client
+    await sqlite_store.upsert_task({
+        "id": "T-W-1", "status": "running", "wave": 1, "depends_on": [],
+        "worker_id": "worker-1", "title": "Task One"
+    })
+    await sqlite_store.upsert_task({
+        "id": "T-W-2", "status": "pending", "wave": 1, "depends_on": [],
+        "worker_id": "worker-2", "title": "Task Two"
+    })
+    await sqlite_store.log_event("task.progress", "T-W-1", payload={"step": "testing", "percent": 80})
+
+    resp = await client.get("/workers")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) == 1
+    assert data[0]["worker_id"] == "worker-1"
+    assert data[0]["task_id"] == "T-W-1"
+    assert data[0]["task_title"] == "Task One"
+    assert data[0]["step"] == "testing"
+    assert data[0]["percent"] == 80
+
+
 class _LifespanManager:
     """Manual lifespan manager for httpx ASGITransport that doesn't support lifespan."""
 

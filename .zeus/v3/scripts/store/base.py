@@ -203,3 +203,11 @@ class AsyncStateStore(abc.ABC):
         If include_runtime is True, also include current runtime status fields.
         """
         raise NotImplementedError
+
+    # ------------------------------------------------------------------
+    # Workers
+    # ------------------------------------------------------------------
+    @abc.abstractmethod
+    async def list_active_workers(self) -> list[dict[str, Any]]:
+        """Return active workers based on heartbeat_at and worker_id."""
+        raise NotImplementedError

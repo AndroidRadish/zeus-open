@@ -7,7 +7,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from db.models import EventLog, Mailbox, Milestone, Phase, PlanHistory, Quarantine, SchedulerMeta, TaskState
@@ -449,6 +449,49 @@ class _SqlAlchemyStateStore(AsyncStateStore):
             stmt = stmt.order_by(PlanHistory.id.desc()).limit(limit).offset(offset)
             result = await session.execute(stmt)
             return [_planhistory_to_dict(r) for r in result.scalars().all()]
+
+    # Workers ----------------------------------------------------------
+    async def list_active_workers(self) -> list[dict[str, Any]]:
+        async with self._session_factory() as session:
+            stmt = (
+                select(TaskState)
+                .where(TaskState.worker_id.is_not(None))
+                .where(TaskState.heartbeat_at.is_not(None))
+                .where(TaskState.status == "running")
+                .order_by(desc(TaskState.heartbeat_at))
+            )
+            result = await session.execute(stmt)
+            rows = result.scalars().all()
+            seen: set[str] = set()
+            workers: list[dict[str, Any]] = []
+            for r in rows:
+                if r.worker_id not in seen:
+                    seen.add(r.worker_id)
+                    # Fetch latest progress event for step/percent
+                    progress_stmt = (
+                        select(EventLog)
+                        .where(EventLog.task_id == r.id)
+                        .where(EventLog.event_type == "task.progress")
+                        .order_by(desc(EventLog.ts))
+                        .limit(1)
+                    )
+                    prog_result = await session.execute(progress_stmt)
+                    prog_row = prog_result.scalar_one_or_none()
+                    step = ""
+                    percent = 0
+                    if prog_row and prog_row.payload:
+                        step = prog_row.payload.get("step", "")
+                        percent = prog_row.payload.get("percent", 0)
+                    workers.append({
+                        "worker_id": r.worker_id,
+                        "heartbeat_at": r.heartbeat_at.isoformat() if r.heartbeat_at else None,
+                        "task_id": r.id,
+                        "task_title": r.title or "",
+                        "task_status": r.status,
+                        "step": step,
+                        "percent": percent,
+                    })
+            return workers
 
     # Plan Export ------------------------------------------------------
     async def export_plan(self, *, include_runtime: bool = False) -> dict[str, Any]:

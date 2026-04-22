@@ -558,206 +558,171 @@
       "worker_id": null,
       "heartbeat_at": "2026-04-16T23:44:34",
       "updated_at": "2026-04-16T23:44:34"
+    },
+    {
+      "id": "T-V3-033",
+      "story_id": "US-V3-013",
+      "title": "后端 API 增强：task detail 附带 latest_progress 与 worker status",
+      "description": "为 /tasks/{id} 接口增加 latest_progress 字段（从 event_log 取最新 task.progress）和 latest_events 字段（最近 5 条事件）。新增 /workers 接口返回当前活跃 worker 列表（基于 heartbeat_at 和 worker_id）。",
+      "wave": 18,
+      "original_wave": null,
+      "scheduled_wave": null,
+      "rescheduled_from": null,
+      "depends_on": [],
+      "ai_log_ref": null,
+      "files": [
+        ".zeus/v3/scripts/api/server.py",
+        ".zeus/v3/scripts/store/base.py",
+        ".zeus/v3/scripts/store/sqlalchemy_base.py",
+        ".zeus/v3/scripts/tests/test_v3_api.py"
+      ],
+      "milestone_id": "M-V3-009",
+      "extra": {
+        "type": "feat",
+        "created_at": "2026-04-22T15:30:00+08:00"
+      },
+      "created_at": "2026-04-22T15:30:00+08:00"
+    },
+    {
+      "id": "T-V3-034",
+      "story_id": "US-V3-013",
+      "title": "TaskDetailDrawer 增加 Progress 区块与 Logs 标签页",
+      "description": "在 TaskDetailDrawer 中新增实时进度展示：当前 step、进度条、最近 3 条进度消息。新增 Logs 标签页，内嵌 /tasks/{id}/logs 内容，替代独立 Modal。",
+      "wave": 19,
+      "original_wave": null,
+      "scheduled_wave": null,
+      "rescheduled_from": null,
+      "depends_on": [
+        "T-V3-033"
+      ],
+      "ai_log_ref": null,
+      "files": [
+        ".zeus/v3/web/src/components/TaskDetailDrawer.vue",
+        ".zeus/v3/web/src/stores/taskStore.ts",
+        ".zeus/v3/web/src/i18n/locales/en.json",
+        ".zeus/v3/web/src/i18n/locales/zh.json"
+      ],
+      "milestone_id": "M-V3-009",
+      "extra": {
+        "type": "feat",
+        "created_at": "2026-04-22T15:30:00+08:00"
+      },
+      "created_at": "2026-04-22T15:30:00+08:00"
+    },
+    {
+      "id": "T-V3-035",
+      "story_id": "US-V3-013",
+      "title": "TasksPanel 列表行增加步骤/进度/心跳指示",
+      "description": "running 状态的任务行增加动态步骤标签（planning/writing/testing...）、微型进度条（从 latest_progress 提取 percent）、心跳动画图标。",
+      "wave": 19,
+      "original_wave": null,
+      "scheduled_wave": null,
+      "rescheduled_from": null,
+      "depends_on": [
+        "T-V3-033"
+      ],
+      "ai_log_ref": null,
+      "files": [
+        ".zeus/v3/web/src/components/TasksPanel.vue",
+        ".zeus/v3/web/src/stores/taskStore.ts",
+        ".zeus/v3/web/src/i18n/locales/en.json",
+        ".zeus/v3/web/src/i18n/locales/zh.json"
+      ],
+      "milestone_id": "M-V3-009",
+      "extra": {
+        "type": "feat",
+        "created_at": "2026-04-22T15:30:00+08:00"
+      },
+      "created_at": "2026-04-22T15:30:00+08:00"
+    },
+    {
+      "id": "T-V3-036",
+      "story_id": "US-V3-013",
+      "title": "新增 Agent 监控面板（Workers 标签页）",
+      "description": "在 Dashboard 新增 Agents/Workers 标签页，展示当前活跃 worker 列表：worker_id、正在执行的 task、当前 step、进度条、最后心跳时间、状态指示灯。后端依赖 /workers 接口。",
+      "wave": 19,
+      "original_wave": null,
+      "scheduled_wave": null,
+      "rescheduled_from": null,
+      "depends_on": [
+        "T-V3-033"
+      ],
+      "ai_log_ref": null,
+      "files": [
+        ".zeus/v3/web/src/components/AgentsPanel.vue",
+        ".zeus/v3/web/src/components/Dashboard.vue",
+        ".zeus/v3/web/src/stores/taskStore.ts",
+        ".zeus/v3/web/src/i18n/locales/en.json",
+        ".zeus/v3/web/src/i18n/locales/zh.json"
+      ],
+      "milestone_id": "M-V3-009",
+      "extra": {
+        "type": "feat",
+        "created_at": "2026-04-22T15:30:00+08:00"
+      },
+      "created_at": "2026-04-22T15:30:00+08:00"
+    },
+    {
+      "id": "T-V3-037",
+      "story_id": "US-V3-013",
+      "title": "SSE 实时进度推送与前端局部更新",
+      "description": "SSE 连接监听 task.progress 事件，收到后局部更新对应 task 行的进度条和步骤标签，避免刷新整个列表。",
+      "wave": 20,
+      "original_wave": null,
+      "scheduled_wave": null,
+      "rescheduled_from": null,
+      "depends_on": [
+        "T-V3-034",
+        "T-V3-035"
+      ],
+      "ai_log_ref": null,
+      "files": [
+        ".zeus/v3/web/src/stores/taskStore.ts",
+        ".zeus/v3/web/src/components/TasksPanel.vue"
+      ],
+      "milestone_id": "M-V3-009",
+      "extra": {
+        "type": "feat",
+        "created_at": "2026-04-22T15:30:00+08:00"
+      },
+      "created_at": "2026-04-22T15:30:00+08:00"
     }
   ],
   "phases": [
     {
-      "id": "P-V3-001",
-      "title": "Foundation",
-      "title_en": "Foundation",
-      "title_zh": "基础架构",
-      "summary": "Observable sub-agent execution",
-      "summary_en": "Observable sub-agent execution",
-      "summary_zh": "子 Agent 执行可观测化",
-      "status": "completed",
-      "progress_percent": 100,
+      "id": "P-V3-005",
+      "title": "Dashboard Observability Enhancement",
+      "title_en": "Dashboard Observability Enhancement",
+      "title_zh": "仪表盘可观测性增强",
+      "summary": "Real-time sub-agent progress and log visibility in Dashboard",
+      "summary_en": "Real-time sub-agent progress and log visibility in Dashboard",
+      "summary_zh": "Dashboard 中子 Agent 实时进度与日志可见性增强",
+      "status": "in_progress",
+      "progress_percent": 0,
       "milestone_ids": [
-        "M-V3-001"
+        "M-V3-009"
       ],
-      "wave_start": 1,
-      "wave_end": 3,
-      "extra": null
-    },
-    {
-      "id": "P-V3-002",
-      "title": "Dashboard & Observability",
-      "title_en": "Dashboard & Observability",
-      "title_zh": "仪表盘与可观测性",
-      "summary": "Dashboard experience, interactivity and visualization",
-      "summary_en": "Dashboard experience, interactivity and visualization",
-      "summary_zh": "Dashboard 体验、交互与可视化",
-      "status": "completed",
-      "progress_percent": 100,
-      "milestone_ids": [
-        "M-V3-002",
-        "M-V3-003",
-        "M-V3-004"
-      ],
-      "wave_start": 2,
-      "wave_end": 11,
-      "extra": null
-    },
-    {
-      "id": "P-V3-003",
-      "title": "Infrastructure",
-      "title_en": "Infrastructure",
-      "title_zh": "基础设施",
-      "summary": "Persistence and containerization hardening",
-      "summary_en": "Persistence and containerization hardening",
-      "summary_zh": "持久化与容器化加固",
-      "status": "completed",
-      "progress_percent": 100,
-      "milestone_ids": [
-        "M-V3-005",
-        "M-V3-006"
-      ],
-      "wave_start": 12,
-      "wave_end": 14,
-      "extra": null
-    },
-    {
-      "id": "P-V3-004",
-      "title": "Quality & Standards",
-      "title_en": "Quality & Standards",
-      "title_zh": "质量与规范",
-      "summary": "Code cleanup, docs and engineering standards",
-      "summary_en": "Code cleanup, docs and engineering standards",
-      "summary_zh": "代码清理、文档与工程规范",
-      "status": "completed",
-      "progress_percent": 100,
-      "milestone_ids": [
-        "M-V3-007",
-        "M-V3-008"
-      ],
-      "wave_start": 15,
-      "wave_end": 17,
+      "wave_start": 18,
+      "wave_end": 20,
       "extra": null
     }
   ],
   "milestones": [
     {
-      "id": "M-V3-001",
-      "title": "Core Execution",
+      "id": "M-V3-009",
+      "title": "Agent Observability",
       "task_ids": [
-        "T-V3-001",
-        "T-V3-003"
+        "T-V3-033",
+        "T-V3-034",
+        "T-V3-035",
+        "T-V3-036",
+        "T-V3-037"
       ],
-      "status": "completed",
-      "progress_percent": 100,
+      "status": "in_progress",
+      "progress_percent": 0,
       "spec_ref": null,
       "story_ids": [
-        "US-V3-001",
-        "US-V3-003"
-      ],
-      "extra": null
-    },
-    {
-      "id": "M-V3-002",
-      "title": "Dashboard Core",
-      "task_ids": [
-        "T-V3-002",
-        "T-V3-015",
-        "T-V3-021"
-      ],
-      "status": "completed",
-      "progress_percent": 100,
-      "spec_ref": null,
-      "story_ids": [
-        "US-V3-002",
-        "US-V3-005",
-        "US-V3-008"
-      ],
-      "extra": null
-    },
-    {
-      "id": "M-V3-003",
-      "title": "Dashboard Interactivity",
-      "task_ids": [
-        "T-V3-018",
-        "T-V3-019",
-        "T-V3-026"
-      ],
-      "status": "completed",
-      "progress_percent": 100,
-      "spec_ref": null,
-      "story_ids": [
-        "US-V3-006",
-        "US-V3-007",
-        "US-V3-008"
-      ],
-      "extra": null
-    },
-    {
-      "id": "M-V3-004",
-      "title": "Visualization",
-      "task_ids": [
-        "T-V3-030",
-        "T-V3-031"
-      ],
-      "status": "completed",
-      "progress_percent": 100,
-      "spec_ref": null,
-      "story_ids": [
-        "US-V3-012"
-      ],
-      "extra": null
-    },
-    {
-      "id": "M-V3-005",
-      "title": "Persistence",
-      "task_ids": [
-        "T-V3-022"
-      ],
-      "status": "completed",
-      "progress_percent": 100,
-      "spec_ref": null,
-      "story_ids": [
-        "US-V3-009"
-      ],
-      "extra": null
-    },
-    {
-      "id": "M-V3-006",
-      "title": "Containerization",
-      "task_ids": [
-        "T-V3-023",
-        "T-V3-024"
-      ],
-      "status": "completed",
-      "progress_percent": 100,
-      "spec_ref": null,
-      "story_ids": [
-        "US-V3-010"
-      ],
-      "extra": null
-    },
-    {
-      "id": "M-V3-007",
-      "title": "Cleanup & Docs",
-      "task_ids": [
-        "T-V3-027",
-        "T-V3-028"
-      ],
-      "status": "completed",
-      "progress_percent": 100,
-      "spec_ref": null,
-      "story_ids": [
-        "US-V3-011"
-      ],
-      "extra": null
-    },
-    {
-      "id": "M-V3-008",
-      "title": "Engineering Standards",
-      "task_ids": [
-        "T-V3-029",
-        "T-V3-032"
-      ],
-      "status": "completed",
-      "progress_percent": 100,
-      "spec_ref": null,
-      "story_ids": [
-        "US-V3-012"
+        "US-V3-013"
       ],
       "extra": null
     }
