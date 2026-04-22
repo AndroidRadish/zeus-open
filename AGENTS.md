@@ -264,6 +264,58 @@ Zeus 不再依赖 `/zeus:*` 斜杠命令。用户通过自然语言表达意图�
 
 ---
 
+## 🏗️ 框架与业务项目分离（v3）
+
+> 目标：框架代码（`scripts/`、`web/`）只在 `zeus-open` 仓库维护，业务项目只保留数据和配置。
+
+### 业务项目保留什么
+
+业务项目的 `.zeus/v3/` 下**只应存在**：
+- `config.json` — 项目配置
+- `task.json` / `task.json.template` — 任务计划
+- `state.db` — 运行时数据库
+- `agent-workspaces/` — 子 Agent 工作空间
+- `ai-logs/` — 执行日志
+- `start.ps1` / `start.sh` — 启动脚本（由 `--init` 生成）
+- `.framework` — 框架仓库路径标记（由 `--init` 生成）
+
+**不应存在**（已迁移到框架仓库）：
+- ❌ `scripts/` — 核心框架代码
+- ❌ `web/` — Dashboard 源码（静态资源由框架仓库 `api/static/` 提供）
+
+### 初始化新业务项目
+
+```powershell
+# 在 zeus-open 仓库中执行
+python .zeus/v3/scripts/run.py --project-root D:\path\to\BusinessProject --init
+```
+
+这会生成 `config.json`、`task.json.template`、`start.ps1`、`.framework` 等最小文件。
+
+### 启动方式
+
+```powershell
+# 方式 1：业务项目中的 thin wrapper（推荐）
+cd D:\path\to\BusinessProject
+.zeus/v3/start.ps1 --mode serve
+
+# 方式 2：直接指定 --project-root（调试/CI 用）
+cd D:\path\to\zeus-open
+python .zeus/v3/scripts/run.py --project-root D:\path\to\BusinessProject --mode serve
+```
+
+### 更新框架
+
+当 `zeus-open` 仓库更新后，业务项目**无需任何操作**，因为 `start.ps1` 始终指向框架仓库的最新代码。
+
+如果业务项目中的 `.zeus/v3/` 还残留旧的 `scripts/` 或 `web/`，请直接删除：
+```powershell
+Remove-Item -Recurse -Force .zeus/v3/scripts
+Remove-Item -Recurse -Force .zeus/v3/web
+```
+
+---
+
 ## 🆘 遇到问题时
 
 ### 如果 runner 报错

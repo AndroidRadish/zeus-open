@@ -53,6 +53,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--no-embedded-scheduler", action="store_true", default=False, help="Disable embedded scheduler in serve mode")
     parser.add_argument("--status", action="store_true", help="Print human-readable project status and exit")
     parser.add_argument("--wave", type=int, default=None, help="Only enqueue tasks in the specified wave")
+    parser.add_argument("--init", action="store_true", help="Initialize project directory with minimal Zeus v3 files and exit")
     return parser.parse_args(argv)
 
 
@@ -104,6 +105,17 @@ async def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     project_root = Path(args.project_root).resolve()
     version = args.version
+
+    # --init: bootstrap minimal project structure and exit
+    if args.init:
+        from init_project import init_project
+        framework_root = Path(__file__).resolve().parent.parent.parent.parent
+        created = init_project(project_root, framework_root, force=False)
+        print(f"[INIT] Project initialized at {project_root}")
+        for c in created:
+            print(f"  + {c}")
+        print(f"\nTo start: cd {project_root} && .zeus/v3/start.ps1 --mode serve")
+        return 0
 
     task_json_path = project_root / ".zeus" / version / "task.json"
     if not task_json_path.exists():
