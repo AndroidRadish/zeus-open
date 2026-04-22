@@ -4,8 +4,9 @@
 - **项目**: zeus-open (通用 AI-CLI 版 Zeus 框架)
 - **版本**: v2 全部 41 个任务已完成；v3 Phase 1 A1 已完成
 - **状态**: v2 Validation pass | 26/26 v3 tests green
-- **最后提交**: `8cf5c1d` (fix: 新增 /tasks/{id}/logs 端点，修复 Dashboard 日志 404)
-- **前序提交**: `8e3dee2` (fix: Windows 初始化 P0/P1 问题 — hook 语法、importer 日期解析、模板污染、schema 同步)
+- **最后提交**: `d258f22` (feat: Dashboard Agent 可观测性增强 — 实时进度、日志、Workers 面板)
+- **前序提交**: `8cf5c1d` (fix: 新增 /tasks/{id}/logs 端点，修复 Dashboard 日志 404)
+- **更早提交**: `8e3dee2` (fix: Windows 初始化 P0/P1 问题 — hook 语法、importer 日期解析、模板污染、schema 同步)
 - **当前阶段**: v3 Phase 1 — async state store, ARP schema, queue-worker, importer, dispatcher, workspace, CLI, stress/subprocess tests
 
 ## v2 已完成里程碑

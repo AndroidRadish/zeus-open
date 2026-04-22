@@ -302,6 +302,33 @@ def create_app(
                     t["latest_progress"] = progress_events[0]
         return tasks
 
+    # ------------------------------------------------------------------
+    # Task logs (must be registered BEFORE /tasks/{task_id} to avoid shadowing)
+    # ------------------------------------------------------------------
+    @app.get("/tasks/{task_id}/logs")
+    async def task_logs(request: FastAPIRequest, task_id: str) -> PlainTextResponse:
+        store = request.app.state.store
+        task = await store.get_task(task_id)
+        workspace_path = None
+        if task and task.get("extra"):
+            workspace_path = task.get("extra", {}).get("workspace")
+        if workspace_path:
+            wp = pathlib.Path(workspace_path)
+            activity_path = wp / "activity.md"
+            if activity_path.exists():
+                return PlainTextResponse(activity_path.read_text("utf-8"))
+
+        events = await store.query_events(task_id=task_id, limit=500)
+        lines = [f"# Task {task_id} Activity Log\n"]
+        for ev in events:
+            ts = ev.get("ts", "")
+            et = ev.get("event_type", "")
+            payload = ev.get("payload", {})
+            lines.append(f"## {ts} — {et}")
+            lines.append(json.dumps(payload, ensure_ascii=False, indent=2))
+            lines.append("")
+        return PlainTextResponse("\n".join(lines) if lines else f"# Task {task_id}\nNo logs available.")
+
     @app.get("/tasks/{task_id}")
     async def get_task(request: FastAPIRequest, task_id: str) -> dict[str, Any]:
         store = request.app.state.store
@@ -511,33 +538,6 @@ def create_app(
             from fastapi.responses import Response
             return Response(content=graph.to_svg_native(), media_type="image/svg+xml")
         return graph.to_echarts()
-
-    # ------------------------------------------------------------------
-    # Task / Agent logs
-    # ------------------------------------------------------------------
-    @app.get("/tasks/{task_id}/logs")
-    async def task_logs(request: FastAPIRequest, task_id: str) -> PlainTextResponse:
-        store = request.app.state.store
-        task = await store.get_task(task_id)
-        workspace_path = None
-        if task and task.get("extra"):
-            workspace_path = task.get("extra", {}).get("workspace")
-        if workspace_path:
-            wp = pathlib.Path(workspace_path)
-            activity_path = wp / "activity.md"
-            if activity_path.exists():
-                return PlainTextResponse(activity_path.read_text("utf-8"))
-
-        events = await store.query_events(task_id=task_id, limit=500)
-        lines = [f"# Task {task_id} Activity Log\n"]
-        for ev in events:
-            ts = ev.get("ts", "")
-            et = ev.get("event_type", "")
-            payload = ev.get("payload", {})
-            lines.append(f"## {ts} — {et}")
-            lines.append(json.dumps(payload, ensure_ascii=False, indent=2))
-            lines.append("")
-        return PlainTextResponse("\n".join(lines) if lines else f"# Task {task_id}\nNo logs available.")
 
     @app.get("/agents/{agent_id}/logs")
     async def agent_logs(request: FastAPIRequest, agent_id: str) -> dict[str, Any]:
