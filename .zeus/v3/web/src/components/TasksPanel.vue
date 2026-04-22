@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   FileText,
   Info,
+  Activity,
 } from 'lucide-vue-next'
 import { useTaskStore } from '../stores/taskStore'
 import { useUiStore } from '../stores/uiStore'
@@ -28,6 +29,14 @@ function statusLabel(status: string) {
 function statusDotClass(status: string) {
   const s = statusList.includes(status as any) ? status : 'pending'
   return `dot-${s}`
+}
+
+function progressPercent(task: any): number {
+  return task.latest_progress?.payload?.percent || 0
+}
+
+function progressStep(task: any): string {
+  return task.latest_progress?.payload?.step || ''
 }
 
 const sortedTasks = computed(() => {
@@ -76,6 +85,15 @@ function onViewDetail(id: string) { uiStore.openDetail(id) }
               <div class="status-cell">
                 <span class="status-dot" :class="statusDotClass(task.status)"></span>
                 <span>{{ statusLabel(task.status) }}</span>
+              </div>
+              <div v-if="task.status === 'running'" class="task-live">
+                <span v-if="progressStep(task)" class="live-step">{{ progressStep(task) }}</span>
+                <div v-if="progressPercent(task) > 0" class="mini-track">
+                  <div class="mini-fill" :style="{ width: progressPercent(task) + '%' }"></div>
+                </div>
+                <span v-if="task.heartbeat_at" class="live-hb" :title="new Date(task.heartbeat_at).toLocaleString()">
+                  <Activity :size="10" class="hb-icon" /> {{ new Date(task.heartbeat_at).toLocaleTimeString() }}
+                </span>
               </div>
             </td>
             <td>
@@ -307,4 +325,44 @@ function onViewDetail(id: string) { uiStore.openDetail(id) }
 
 .btn-secondary { color: var(--z-text-secondary); border-color: rgba(148, 163, 184, 0.18); }
 .btn-secondary:hover { background: rgba(148, 163, 184, 0.12); border-color: rgba(148, 163, 184, 0.35); }
+
+.task-live {
+  margin-top: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.live-step {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--z-accent-cyan);
+  text-transform: capitalize;
+}
+.mini-track {
+  width: 80px;
+  height: 4px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.mini-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--z-accent-cyan), #22d3ee);
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+.live-hb {
+  font-size: 0.68rem;
+  color: var(--z-text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+.hb-icon {
+  animation: pulseIcon 1.4s ease-in-out infinite;
+}
+@keyframes pulseIcon {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
 </style>

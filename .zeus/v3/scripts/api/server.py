@@ -292,7 +292,15 @@ def create_app(
         status: str | None = Query(None),
         wave: int | None = Query(None),
     ) -> list[dict[str, Any]]:
-        return await request.app.state.store.list_tasks(status=status, wave=wave)
+        store = request.app.state.store
+        tasks = await store.list_tasks(status=status, wave=wave)
+        # Attach latest progress to running tasks for Dashboard live indicators
+        for t in tasks:
+            if t.get("status") == "running":
+                progress_events = await store.query_events(task_id=t["id"], event_type="task.progress", limit=1)
+                if progress_events:
+                    t["latest_progress"] = progress_events[0]
+        return tasks
 
     @app.get("/tasks/{task_id}")
     async def get_task(request: FastAPIRequest, task_id: str) -> dict[str, Any]:
