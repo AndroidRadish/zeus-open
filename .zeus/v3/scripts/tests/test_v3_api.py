@@ -602,6 +602,43 @@ async def test_hot_reload_task_json(sqlite_store, tmp_path):
     assert any(e == "config.reloaded" for e, _ in emitted)
 
 
+@pytest.mark.asyncio
+async def test_task_logs_from_events(api_client, sqlite_store):
+    """Regression: /tasks/{id}/logs must return plain text, not 404."""
+    client, _ = api_client
+    await sqlite_store.upsert_task({"id": "T-LOG-1", "status": "pending", "wave": 1, "depends_on": []})
+    await sqlite_store.log_event("task.started", "T-LOG-1", payload={"message": "hello"})
+
+    resp = await client.get("/tasks/T-LOG-1/logs")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/plain")
+    text = resp.text
+    assert "T-LOG-1" in text
+    assert "task.started" in text
+
+
+@pytest.mark.asyncio
+async def test_task_logs_from_workspace(api_client, sqlite_store, tmp_path):
+    """/tasks/{id}/logs should read activity.md from workspace when available."""
+    client, _ = api_client
+    ws = tmp_path / "ws" / "T-LOG-2"
+    ws.mkdir(parents=True)
+    (ws / "activity.md").write_text("# Workspace activity\nDone.", encoding="utf-8")
+
+    await sqlite_store.upsert_task({
+        "id": "T-LOG-2",
+        "status": "pending",
+        "wave": 1,
+        "depends_on": [],
+        "extra": {"workspace": str(ws)},
+    })
+
+    resp = await client.get("/tasks/T-LOG-2/logs")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/plain")
+    assert "Workspace activity" in resp.text
+
+
 class _LifespanManager:
     """Manual lifespan manager for httpx ASGITransport that doesn't support lifespan."""
 

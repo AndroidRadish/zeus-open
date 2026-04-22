@@ -6,6 +6,7 @@ Provides REST + SSE endpoints for the v3 execution engine.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from contextlib import asynccontextmanager
 from typing import Any
@@ -14,7 +15,7 @@ import pathlib
 
 from fastapi import FastAPI, HTTPException, Query, Request as FastAPIRequest
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -493,8 +494,32 @@ def create_app(
         return graph.to_echarts()
 
     # ------------------------------------------------------------------
-    # Agent logs
+    # Task / Agent logs
     # ------------------------------------------------------------------
+    @app.get("/tasks/{task_id}/logs")
+    async def task_logs(request: FastAPIRequest, task_id: str) -> PlainTextResponse:
+        store = request.app.state.store
+        task = await store.get_task(task_id)
+        workspace_path = None
+        if task and task.get("extra"):
+            workspace_path = task.get("extra", {}).get("workspace")
+        if workspace_path:
+            wp = pathlib.Path(workspace_path)
+            activity_path = wp / "activity.md"
+            if activity_path.exists():
+                return PlainTextResponse(activity_path.read_text("utf-8"))
+
+        events = await store.query_events(task_id=task_id, limit=500)
+        lines = [f"# Task {task_id} Activity Log\n"]
+        for ev in events:
+            ts = ev.get("ts", "")
+            et = ev.get("event_type", "")
+            payload = ev.get("payload", {})
+            lines.append(f"## {ts} — {et}")
+            lines.append(json.dumps(payload, ensure_ascii=False, indent=2))
+            lines.append("")
+        return PlainTextResponse("\n".join(lines) if lines else f"# Task {task_id}\nNo logs available.")
+
     @app.get("/agents/{agent_id}/logs")
     async def agent_logs(request: FastAPIRequest, agent_id: str) -> dict[str, Any]:
         store = request.app.state.store

@@ -4,7 +4,8 @@
 - **项目**: zeus-open (通用 AI-CLI 版 Zeus 框架)
 - **版本**: v2 全部 41 个任务已完成；v3 Phase 1 A1 已完成
 - **状态**: v2 Validation pass | 26/26 v3 tests green
-- **最后提交**: `49d5199` (v3 Phase 1 A1: CLI runner, stress tests, subprocess ARP integration)
+- **最后提交**: `8e3dee2` (fix: Windows 初始化 P0/P1 问题 — hook 语法、importer 日期解析、模板污染、schema 同步)
+- **前序提交**: `49d5199` (v3 Phase 1 A1: CLI runner, stress tests, subprocess ARP integration)
 - **当前阶段**: v3 Phase 1 — async state store, ARP schema, queue-worker, importer, dispatcher, workspace, CLI, stress/subprocess tests
 
 ## v2 已完成里程碑
