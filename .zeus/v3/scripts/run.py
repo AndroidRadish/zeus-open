@@ -46,7 +46,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--import-only", action="store_true", help="Only import task.json into DB and exit")
     parser.add_argument("--export-plan", action="store_true", help="Export current DB plan to task.json and exit")
     parser.add_argument("--mode", default="combined", choices=["combined", "scheduler", "worker", "serve"], help="Execution mode")
-    parser.add_argument("--host", default="127.0.0.1", help="API server host")
+    parser.add_argument("--host", default="0.0.0.0", help="API server host")
     parser.add_argument("--port", type=int, default=8000, help="API server port")
     parser.add_argument("--trace", action="store_true", help="Enable OpenTelemetry console trace output")
     parser.add_argument("--embedded-scheduler", action="store_true", default=True, help="Start embedded scheduler+workers in serve mode (default: True)")
