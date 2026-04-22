@@ -86,6 +86,18 @@ export const useTaskStore = defineStore('task', () => {
         try {
           const data = JSON.parse(e.data)
           eventStore.pushLive(data)
+          // Live patch running task progress without full list refresh
+          if (data.event_type === 'task.progress' && data.task_id) {
+            const task = tasks.value.find((t: any) => t.id === data.task_id)
+            if (task && task.status === 'running') {
+              task.latest_progress = {
+                event_type: data.event_type,
+                task_id: data.task_id,
+                payload: data.progress || {},
+                ts: data.ts,
+              }
+            }
+          }
         } catch {}
       }
     } catch (e) {
