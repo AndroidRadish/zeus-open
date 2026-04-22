@@ -20,7 +20,8 @@
     "phases": "Phases",
     "mailbox": "Mailbox",
     "control": "Control",
-    "metrics": "Metrics"
+    "metrics": "Metrics",
+    "agents": "Agents"
   },
   "stats": {
     "total": "Total",
@@ -65,6 +66,16 @@
   "result": {
     "pass": "Pass",
     "fail": "Fail"
+  },
+  "agents": {
+    "title": "Agent Monitor",
+    "worker": "Worker",
+    "task": "Task",
+    "step": "Step",
+    "progress": "Progress",
+    "heartbeat": "Heartbeat",
+    "status": "Status",
+    "empty": "No active workers at the moment"
   },
   "actions": {
     "retry": "Retry",

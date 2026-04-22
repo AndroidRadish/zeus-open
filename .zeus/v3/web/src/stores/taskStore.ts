@@ -4,6 +4,7 @@ import { useEventStore } from './eventStore'
 
 export const useTaskStore = defineStore('task', () => {
   const tasks = ref<any[]>([])
+  const workers = ref<any[]>([])
   const metrics = ref<any>(null)
   const connected = ref(false)
   const health = ref<any>(null)
@@ -34,6 +35,15 @@ export const useTaskStore = defineStore('task', () => {
       if (res.ok) health.value = await res.json()
     } catch {
       health.value = { status: 'error' }
+    }
+  }
+
+  async function fetchWorkers() {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE || ''}/workers`)
+      if (res.ok) workers.value = await res.json()
+    } catch {
+      workers.value = []
     }
   }
 
@@ -111,6 +121,7 @@ export const useTaskStore = defineStore('task', () => {
     pollTimer = setInterval(() => {
       fetchTasks()
       fetchMetrics()
+      fetchWorkers()
     }, 8000)
   }
 
@@ -124,12 +135,14 @@ export const useTaskStore = defineStore('task', () => {
 
   return {
     tasks,
+    workers,
     metrics,
     connected,
     health,
     fetchTasks,
     fetchMetrics,
     fetchHealth,
+    fetchWorkers,
     taskAction,
     switchProject,
     connectSSE,

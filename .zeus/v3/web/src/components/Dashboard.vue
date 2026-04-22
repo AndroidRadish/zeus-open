@@ -11,6 +11,7 @@ import {
   SlidersHorizontal,
   BarChart3,
   HeartPulse,
+  Cpu,
 } from 'lucide-vue-next'
 import { useTaskStore } from '../stores/taskStore'
 import { useEventStore } from '../stores/eventStore'
@@ -23,6 +24,7 @@ import WorkflowGraphPanel from './WorkflowGraphPanel.vue'
 import PhasesPanel from './PhasesPanel.vue'
 import MailboxPanel from './MailboxPanel.vue'
 import MetricsPanel from './MetricsPanel.vue'
+import AgentsPanel from './AgentsPanel.vue'
 import TaskDetailDrawer from './TaskDetailDrawer.vue'
 
 const { t, locale } = useI18n()
@@ -41,6 +43,7 @@ const tabs = [
   { key: 'phases', label: t('tabs.phases'), icon: Layers },
   { key: 'mailbox', label: t('tabs.mailbox'), icon: Mail },
   { key: 'metrics', label: t('tabs.metrics'), icon: BarChart3 },
+  { key: 'agents', label: t('tabs.agents'), icon: Cpu },
   { key: 'control', label: t('tabs.control'), icon: SlidersHorizontal },
 ] as const
 
@@ -202,6 +205,11 @@ function onControlRefresh() {
       <!-- Metrics -->
       <section v-if="uiStore.activeTab === 'metrics'" class="animate-fade-in-up">
         <MetricsPanel />
+      </section>
+
+      <!-- Agents -->
+      <section v-if="uiStore.activeTab === 'agents'" class="animate-fade-in-up">
+        <AgentsPanel />
       </section>
 
       <!-- Control -->
