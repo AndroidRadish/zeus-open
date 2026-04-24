@@ -65,10 +65,24 @@ class ZeusWorker:
         if self.bus:
             self.bus.emit("task.started", {"task_id": tid, "worker_id": self.worker_id, "wave": task.get("wave")})
 
+        run_id: int | None = None
         workspace: Path | None = None
         heartbeat_task = None
+
+        async def _end_run(status: str, summary: str = "") -> None:
+            nonlocal run_id
+            if run_id is not None:
+                await self.store.finish_worker_run(
+                    run_id, status, result_summary=summary or None
+                )
+                run_id = None
+
         try:
             workspace = await self.workspace_manager.prepare(task)
+            workspace_path = str(workspace) if workspace else None
+            run_id = await self.store.create_worker_run(
+                self.worker_id, tid, workspace=workspace_path
+            )
             prompt = self.workspace_manager.prompt_path(tid).read_text("utf-8")
 
             last_progress_line_count = 0
@@ -105,6 +119,7 @@ class ZeusWorker:
             heartbeat_task = asyncio.create_task(_heartbeat_loop())
             raw_result = await self.dispatcher.run(task, workspace, prompt, bus=self.bus)
         except Exception as exc:
+            await _end_run("failed", str(exc)[:200])
             await self.store.log_event(
                 event_type="task.failed",
                 task_id=tid,
@@ -134,6 +149,7 @@ class ZeusWorker:
         try:
             validated = ZeusResult.model_validate(zeus_result)
         except Exception as exc:
+            await _end_run("failed", f"invalid zeus-result.json: {exc}"[:200])
             await self.store.log_event(
                 event_type="task.failed",
                 task_id=tid,
@@ -149,6 +165,8 @@ class ZeusWorker:
             return
 
         if validated.status == "completed":
+            summary = f"commit: {validated.commit_sha}"[:200] if validated.commit_sha else "completed"
+            await _end_run("completed", summary)
             await self.store.update_task_status(
                 tid,
                 "completed",
@@ -169,6 +187,7 @@ class ZeusWorker:
                 self.bus.emit("task.completed", {"task_id": tid, "worker_id": self.worker_id, "commit_sha": validated.commit_sha})
             await self.queue.ack(tid)
         else:
+            await _end_run("failed", validated.artifacts.get("error", "partial_or_failed")[:200])
             await self.store.update_task_status(tid, "failed", passes=False)
             await self.store.update_task_status(tid, "failed", passes=False, worker_id=None)
             await self.store.log_event(

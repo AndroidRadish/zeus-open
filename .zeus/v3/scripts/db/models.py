@@ -151,6 +151,24 @@ class EventLog(Base):
     payload: Mapped[Any] = mapped_column(JSON, nullable=True)
 
 
+class WorkerRun(Base):
+    """Audit trail for each worker task execution."""
+
+    __tablename__ = "worker_run"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    worker_id: Mapped[str] = mapped_column(String(64), index=True)
+    task_id: Mapped[str] = mapped_column(String(64), index=True)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="running")
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    result_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    workspace: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class PlanHistory(Base):
     """Audit trail for plan mutations (task/phase/milestone CRUD)."""
 

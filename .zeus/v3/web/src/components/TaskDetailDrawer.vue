@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { X, GitBranch, FileText, Clock, Activity, Target, AlignLeft, BarChart3, ScrollText } from 'lucide-vue-next'
+import { X, GitBranch, FileText, Clock, Activity, Target, AlignLeft, BarChart3, ScrollText, Terminal } from 'lucide-vue-next'
+import { useTaskStore } from '../stores/taskStore'
 
 const { t } = useI18n()
+const taskStore = useTaskStore()
 
 export interface TaskDetail {
   id: string
@@ -35,9 +37,13 @@ const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
-const activeTab = ref<'details' | 'logs'>('details')
+const activeTab = ref<'details' | 'logs' | 'execution'>('details')
 const logsContent = ref('')
 const logsLoading = ref(false)
+const timeline = ref<any[]>([])
+const timelineLoading = ref(false)
+const taskResult = ref<any>(null)
+const taskResultLoading = ref(false)
 
 watch(() => props.open, (val) => {
   if (typeof document !== 'undefined') {
@@ -46,12 +52,14 @@ watch(() => props.open, (val) => {
   if (val && props.task) {
     activeTab.value = 'details'
     loadLogs()
+    loadExecution()
   }
 })
 
 watch(() => props.task?.id, () => {
   if (props.open && props.task) {
     loadLogs()
+    loadExecution()
   }
 })
 
@@ -69,8 +77,36 @@ async function loadLogs() {
   }
 }
 
+async function loadExecution() {
+  if (!props.task) return
+  timelineLoading.value = true
+  taskResultLoading.value = true
+  timeline.value = await taskStore.fetchTaskTimeline(props.task.id)
+  timelineLoading.value = false
+  taskResult.value = await taskStore.fetchTaskResult(props.task.id)
+  taskResultLoading.value = false
+}
+
 function onClose() {
   emit('close')
+}
+
+function eventIcon(et: string) {
+  if (et === 'task.started') return '▶'
+  if (et === 'task.completed') return '✓'
+  if (et === 'task.failed') return '✗'
+  if (et === 'task.progress') return '⋯'
+  if (et === 'task.retried') return '↻'
+  if (et === 'task.cancelled') return '⊘'
+  return '•'
+}
+
+function eventColorClass(et: string) {
+  if (et === 'task.started') return 'event-started'
+  if (et === 'task.completed') return 'event-completed'
+  if (et === 'task.failed') return 'event-failed'
+  if (et === 'task.progress') return 'event-progress'
+  return 'event-default'
 }
 
 function statusClass(status: string) {
@@ -149,6 +185,13 @@ function progressMessages(task: TaskDetail): string[] {
             >
               <ScrollText :size="13" /> {{ t('tasks.logs') }}
             </button>
+            <button
+              class="tab-btn"
+              :class="{ active: activeTab === 'execution' }"
+              @click="activeTab = 'execution'"
+            >
+              <Terminal :size="13" /> {{ t('tasks.execution') }}
+            </button>
           </div>
 
           <!-- Details tab -->
@@ -224,6 +267,39 @@ function progressMessages(task: TaskDetail): string[] {
           <div v-if="activeTab === 'logs'" class="tab-content">
             <div v-if="logsLoading" class="logs-loading">{{ t('tasks.loadingLogs') }}</div>
             <pre v-else class="logs-pre">{{ logsContent || t('tasks.noLogs') }}</pre>
+          </div>
+
+          <!-- Execution tab -->
+          <div v-if="activeTab === 'execution'" class="tab-content">
+            <!-- Timeline -->
+            <div class="detail-block">
+              <div class="block-label"><Clock :size="14" /> {{ t('tasks.timeline') }}</div>
+              <div v-if="timelineLoading" class="logs-loading">Loading…</div>
+              <div v-else-if="!timeline.length" class="muted">No execution events</div>
+              <div v-else class="timeline">
+                <div v-for="(ev, idx) in timeline" :key="idx" class="timeline-item">
+                  <div class="timeline-marker" :class="eventColorClass(ev.event_type)">
+                    <span class="timeline-icon">{{ eventIcon(ev.event_type) }}</span>
+                  </div>
+                  <div class="timeline-body">
+                    <div class="timeline-meta">
+                      <span class="timeline-type">{{ ev.event_type }}</span>
+                      <span class="timeline-time">{{ new Date(ev.ts).toLocaleString() }}</span>
+                    </div>
+                    <div v-if="ev.payload && Object.keys(ev.payload).length" class="timeline-payload">
+                      <pre class="payload-pre">{{ JSON.stringify(ev.payload, null, 2) }}</pre>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Result -->
+            <div class="detail-block">
+              <div class="block-label"><Terminal :size="14" /> {{ t('tasks.result') }}</div>
+              <div v-if="taskResultLoading" class="logs-loading">Loading…</div>
+              <div v-else-if="!taskResult" class="muted">No result available</div>
+              <pre v-else class="result-pre">{{ JSON.stringify(taskResult, null, 2) }}</pre>
+            </div>
           </div>
         </div>
 
@@ -503,6 +579,113 @@ function progressMessages(task: TaskDetail): string[] {
   word-break: break-word;
   max-height: 360px;
   overflow-y: auto;
+}
+
+.result-pre {
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 0.5rem;
+  padding: 0.85rem 1rem;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: #cbd5e1;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+  padding-left: 0.5rem;
+}
+
+.timeline-item {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  position: relative;
+}
+
+.timeline-item:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 28px;
+  bottom: -4px;
+  width: 2px;
+  background: rgba(255,255,255,0.08);
+}
+
+.timeline-marker {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.timeline-icon {
+  line-height: 1;
+}
+
+.event-started { background: rgba(34,211,238,0.15); color: var(--z-accent-cyan); }
+.event-completed { background: rgba(52,211,153,0.15); color: var(--z-success); }
+.event-failed { background: rgba(248,113,113,0.15); color: var(--z-danger); }
+.event-progress { background: rgba(251,191,36,0.15); color: var(--z-warning); }
+.event-default { background: rgba(255,255,255,0.08); color: var(--z-text-secondary); }
+
+.timeline-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.timeline-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.timeline-type {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.timeline-time {
+  font-size: 0.7rem;
+  color: var(--z-text-muted);
+  font-family: var(--font-mono);
+}
+
+.timeline-payload {
+  margin-top: 0.25rem;
+}
+
+.payload-pre {
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 0.35rem;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: #cbd5e1;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 160px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  margin: 0;
 }
 
 /* Transitions */

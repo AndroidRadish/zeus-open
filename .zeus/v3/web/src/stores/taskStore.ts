@@ -5,6 +5,7 @@ import { useEventStore } from './eventStore'
 export const useTaskStore = defineStore('task', () => {
   const tasks = ref<any[]>([])
   const workers = ref<any[]>([])
+  const workerHistory = ref<any[]>([])
   const metrics = ref<any>(null)
   const connected = ref(false)
   const health = ref<any>(null)
@@ -47,6 +48,41 @@ export const useTaskStore = defineStore('task', () => {
     }
   }
 
+  async function fetchWorkerHistory(limit: number = 50, offset: number = 0) {
+    try {
+      const base = import.meta.env.VITE_API_BASE || ''
+      const res = await fetch(`${base}/workers/history?limit=${limit}&offset=${offset}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (offset === 0) {
+          workerHistory.value = data
+        } else {
+          workerHistory.value.push(...data)
+        }
+        return data.length
+      }
+    } catch {}
+    return 0
+  }
+
+  async function fetchTaskTimeline(taskId: string) {
+    try {
+      const base = import.meta.env.VITE_API_BASE || ''
+      const res = await fetch(`${base}/tasks/${taskId}/timeline`)
+      if (res.ok) return await res.json()
+    } catch {}
+    return []
+  }
+
+  async function fetchTaskResult(taskId: string) {
+    try {
+      const base = import.meta.env.VITE_API_BASE || ''
+      const res = await fetch(`${base}/tasks/${taskId}/result`)
+      if (res.ok) return await res.json()
+    } catch {}
+    return null
+  }
+
   async function taskAction(action: string, id: string) {
     await fetch(`${import.meta.env.VITE_API_BASE || ''}/tasks/${id}/${action}`, { method: 'POST' })
     await fetchTasks()
@@ -56,11 +92,16 @@ export const useTaskStore = defineStore('task', () => {
     const res = await fetch(`${import.meta.env.VITE_API_BASE || ''}/control/project/switch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ root }),
+      body: JSON.stringify({ project_root: root }),
     })
     if (res.ok) {
       await fetchTasks()
       await fetchMetrics()
+      // Reconnect SSE and refresh events for the new project
+      connectSSE(currentLocale)
+      const eventStore = useEventStore()
+      eventStore.clearLive()
+      await eventStore.fetchHistory()
       return true
     }
     return false
@@ -148,6 +189,7 @@ export const useTaskStore = defineStore('task', () => {
   return {
     tasks,
     workers,
+    workerHistory,
     metrics,
     connected,
     health,
@@ -155,6 +197,9 @@ export const useTaskStore = defineStore('task', () => {
     fetchMetrics,
     fetchHealth,
     fetchWorkers,
+    fetchWorkerHistory,
+    fetchTaskTimeline,
+    fetchTaskResult,
     taskAction,
     switchProject,
     connectSSE,

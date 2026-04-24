@@ -54,7 +54,10 @@
     "progress": "Progress",
     "logs": "Logs",
     "loadingLogs": "Loading logs…",
-    "noLogs": "No logs available"
+    "noLogs": "No logs available",
+    "execution": "Execution",
+    "timeline": "Timeline",
+    "result": "Result"
   },
   "status": {
     "pending": "Pending",
@@ -75,7 +78,15 @@
     "progress": "Progress",
     "heartbeat": "Heartbeat",
     "status": "Status",
-    "empty": "No active workers at the moment"
+    "empty": "No active workers at the moment",
+    "historyTitle": "Execution History",
+    "recentRuns": "Recent Runs",
+    "duration": "Duration",
+    "startedAt": "Started",
+    "endedAt": "Ended",
+    "result": "Result",
+    "activeWorkers": "Active Workers",
+    "loadMore": "Load more"
   },
   "actions": {
     "retry": "Retry",

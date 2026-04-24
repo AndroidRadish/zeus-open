@@ -4,7 +4,9 @@ Base workspace manager interface.
 from __future__ import annotations
 
 import abc
+import asyncio
 import shutil
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -18,9 +20,17 @@ class BaseWorkspaceManager(abc.ABC):
         self.project_root = Path(project_root)
         self.version = version
         self.config = ZeusConfig(project_root, version)
+        self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="zeus_ws_")
+
+    def _sanitize_task_id(self, task_id: str) -> str:
+        safe = task_id.replace("..", "").replace("/", "").replace("\\", "")
+        if not safe:
+            raise ValueError(f"Invalid task_id: {task_id}")
+        return safe
 
     def workspace_path(self, task_id: str) -> Path:
-        return self.project_root / ".zeus" / self.version / "agent-workspaces" / f"zeus-agent-{task_id}"
+        safe_id = self._sanitize_task_id(task_id)
+        return self.project_root / ".zeus" / self.version / "agent-workspaces" / f"zeus-agent-{safe_id}"
 
     def prompt_path(self, task_id: str) -> Path:
         return self.workspace_path(task_id) / "PROMPT.md"
@@ -118,12 +128,25 @@ class BaseWorkspaceManager(abc.ABC):
 
 你也可以通过 HTTP POST 主动上报进度：
 ```bash
-curl -X POST http://127.0.0.1:8000/tasks/{task_id}/progress -H "Content-Type: application/json" -d '{{"step":"writing","message":"正在修改 api/server.py"}}'
+curl -X POST http://127.0.0.1:8234/tasks/{task_id}/progress -H "Content-Type: application/json" -d '{{"step":"writing","message":"正在修改 api/server.py"}}'
 ```
+
+### 5. Token 效率铁律（Kimi 2.6 特化）
+Kimi 2.6 模型有过度自我反思和重复确认的倾向，这会浪费大量上下文窗口和 token。你必须严格遵守：
+
+- **禁止自我反思循环**：执行过程中不要插入"让我重新评估"、"我需要再想想"、"等一下这可能不对"等元认知语句。基于已有信息做一次决策，然后直接执行。
+- **禁止重复确认**：不要在每个步骤前声明"我确认理解任务"或"我确认这是正确的"。你的输出应该是代码、文件内容或操作结果，不是内心独白。
+- **禁止过度铺垫**：除非任务明确要求分析，否则不要写超过 2 句话的引言。直接开始写代码或执行操作。
+- **上下文即真理**：已读过的文件、已确认过的假设，不要在中途重新读取或重新确认。相信你的第一次判断。
+- **ai-log 需精简**：`.zeus/{self.version}/ai-logs/` 中的日志文件每个章节不超过 300 字，只记录做了什么和验证结果，不写思考过程。
 
 完成后，请在 Kimi Code 主会话中报告执行结果。
 """
 
     async def _to_thread(self, func, *args, **kwargs):
-        import asyncio
-        return await asyncio.to_thread(func, *args, **kwargs)
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(self._executor, lambda: func(*args, **kwargs))
+
+    def shutdown(self, wait: bool = False) -> None:
+        """Shutdown the thread pool; use wait=False for fast exit on Ctrl+C."""
+        self._executor.shutdown(wait=wait, cancel_futures=True)

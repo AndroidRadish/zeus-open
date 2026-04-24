@@ -10,7 +10,7 @@ from typing import Any
 from sqlalchemy import delete, desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from db.models import EventLog, Mailbox, Milestone, Phase, PlanHistory, Quarantine, SchedulerMeta, TaskState
+from db.models import EventLog, Mailbox, Milestone, Phase, PlanHistory, Quarantine, SchedulerMeta, TaskState, WorkerRun
 from store.base import AsyncStateStore
 
 
@@ -36,6 +36,20 @@ def _taskstate_to_dict(obj: TaskState) -> dict[str, Any]:
         "heartbeat_at": obj.heartbeat_at.isoformat() if obj.heartbeat_at else None,
         "created_at": obj.created_at.isoformat() if obj.created_at else None,
         "updated_at": obj.updated_at.isoformat() if obj.updated_at else None,
+    }
+
+
+def _workerrun_to_dict(obj: WorkerRun) -> dict[str, Any]:
+    return {
+        "id": obj.id,
+        "worker_id": obj.worker_id,
+        "task_id": obj.task_id,
+        "started_at": obj.started_at.isoformat() if obj.started_at else None,
+        "ended_at": obj.ended_at.isoformat() if obj.ended_at else None,
+        "status": obj.status,
+        "duration_ms": obj.duration_ms,
+        "result_summary": obj.result_summary,
+        "workspace": obj.workspace,
     }
 
 
@@ -453,6 +467,7 @@ class _SqlAlchemyStateStore(AsyncStateStore):
     # Workers ----------------------------------------------------------
     async def list_active_workers(self) -> list[dict[str, Any]]:
         async with self._session_factory() as session:
+            # Step 1: fetch all running tasks in one query
             stmt = (
                 select(TaskState)
                 .where(TaskState.worker_id.is_not(None))
@@ -461,37 +476,99 @@ class _SqlAlchemyStateStore(AsyncStateStore):
                 .order_by(desc(TaskState.heartbeat_at))
             )
             result = await session.execute(stmt)
-            rows = result.scalars().all()
+            tasks = result.scalars().all()
+            if not tasks:
+                return []
+
+            # Step 2: bulk-fetch latest progress per task (avoid N+1)
+            task_ids = [t.id for t in tasks]
+            subq = (
+                select(
+                    EventLog.task_id,
+                    EventLog.payload,
+                    func.max(EventLog.ts).label("max_ts"),
+                )
+                .where(EventLog.task_id.in_(task_ids))
+                .where(EventLog.event_type == "task.progress")
+                .group_by(EventLog.task_id)
+                .subquery()
+            )
+            prog_result = await session.execute(
+                select(EventLog.task_id, EventLog.payload).join(
+                    subq,
+                    (EventLog.task_id == subq.c.task_id) & (EventLog.ts == subq.c.max_ts),
+                )
+            )
+            progress_map = {tid: payload for tid, payload in prog_result.all()}
+
             seen: set[str] = set()
             workers: list[dict[str, Any]] = []
-            for r in rows:
-                if r.worker_id not in seen:
-                    seen.add(r.worker_id)
-                    # Fetch latest progress event for step/percent
-                    progress_stmt = (
-                        select(EventLog)
-                        .where(EventLog.task_id == r.id)
-                        .where(EventLog.event_type == "task.progress")
-                        .order_by(desc(EventLog.ts))
-                        .limit(1)
-                    )
-                    prog_result = await session.execute(progress_stmt)
-                    prog_row = prog_result.scalar_one_or_none()
-                    step = ""
-                    percent = 0
-                    if prog_row and prog_row.payload:
-                        step = prog_row.payload.get("step", "")
-                        percent = prog_row.payload.get("percent", 0)
-                    workers.append({
-                        "worker_id": r.worker_id,
-                        "heartbeat_at": r.heartbeat_at.isoformat() if r.heartbeat_at else None,
-                        "task_id": r.id,
-                        "task_title": r.title or "",
-                        "task_status": r.status,
-                        "step": step,
-                        "percent": percent,
-                    })
+            for t in tasks:
+                if t.worker_id in seen:
+                    continue
+                seen.add(t.worker_id)
+                payload = progress_map.get(t.id, {})
+                workers.append({
+                    "worker_id": t.worker_id,
+                    "heartbeat_at": t.heartbeat_at.isoformat() if t.heartbeat_at else None,
+                    "task_id": t.id,
+                    "task_title": t.title or "",
+                    "task_status": t.status,
+                    "step": payload.get("step", "") if payload else "",
+                    "percent": payload.get("percent", 0) if payload else 0,
+                })
             return workers
+
+    # Worker Runs ------------------------------------------------------
+    async def create_worker_run(self, worker_id: str, task_id: str, workspace: str | None = None) -> int:
+        async with self._session_factory() as session:
+            obj = WorkerRun(worker_id=worker_id, task_id=task_id, workspace=workspace)
+            session.add(obj)
+            await session.commit()
+            return obj.id
+
+    async def finish_worker_run(self, run_id: int, status: str, result_summary: str | None = None) -> None:
+        async with self._session_factory() as session:
+            result = await session.execute(select(WorkerRun).where(WorkerRun.id == run_id))
+            obj = result.scalar_one_or_none()
+            if obj is None:
+                return
+            ended = datetime.now(timezone.utc)
+            duration = None
+            if obj.started_at:
+                started = obj.started_at
+                if started.tzinfo is None:
+                    started = started.replace(tzinfo=timezone.utc)
+                duration = int((ended - started).total_seconds() * 1000)
+            obj.ended_at = ended
+            obj.status = status
+            obj.duration_ms = duration
+            obj.result_summary = result_summary
+            await session.commit()
+
+    async def list_worker_runs(
+        self,
+        *,
+        worker_id: str | None = None,
+        task_id: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        async with self._session_factory() as session:
+            stmt = select(WorkerRun).order_by(desc(WorkerRun.id))
+            if worker_id is not None:
+                stmt = stmt.where(WorkerRun.worker_id == worker_id)
+            if task_id is not None:
+                stmt = stmt.where(WorkerRun.task_id == task_id)
+            stmt = stmt.limit(limit).offset(offset)
+            result = await session.execute(stmt)
+            return [_workerrun_to_dict(r) for r in result.scalars().all()]
+
+    async def get_worker_run(self, run_id: int) -> dict[str, Any] | None:
+        async with self._session_factory() as session:
+            result = await session.execute(select(WorkerRun).where(WorkerRun.id == run_id))
+            obj = result.scalar_one_or_none()
+            return _workerrun_to_dict(obj) if obj else None
 
     # Plan Export ------------------------------------------------------
     async def export_plan(self, *, include_runtime: bool = False) -> dict[str, Any]:

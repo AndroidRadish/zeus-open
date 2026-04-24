@@ -51,6 +51,7 @@ def create_app(
         watch_task = None
         pool = None
         queue = None
+        workspace_manager = None
         reload_lock = asyncio.Lock() if project_root else None
 
         # Recover any tasks stuck in 'running' from a previous scheduler crash
@@ -160,7 +161,8 @@ def create_app(
             max_workers = embedded_runner.get("max_workers", 3)
             queue_backend = embedded_runner.get("queue_backend", "memory")
             redis_url = embedded_runner.get("redis_url")
-            dispatcher_cfg = embedded_runner.get("config", ZeusConfig(runner_root, version).raw())
+            config = ZeusConfig(runner_root, version)
+            dispatcher_cfg = embedded_runner.get("config", config.raw())
 
             if queue_backend == "sqlite":
                 queue = SqliteTaskQueue(str(runner_root / ".zeus" / version / "queue.sqlite"))
@@ -185,7 +187,8 @@ def create_app(
             enqueued_ids: set[str] = set()
             async def _scheduler_loop():
                 idle_count = 0
-                max_idle = 10
+                max_idle = config.worker_max_idle_ticks
+                tick_interval = config.scheduler_tick_interval
                 try:
                     while True:
                         target = await app.state.store.get_meta("scheduler_target_state", "running")
@@ -207,14 +210,15 @@ def create_app(
                                 if pending == 0 and running == 0:
                                     await scheduler.mark_global_completed()
                                     break
-                            await asyncio.sleep(0.2)
+                            await asyncio.sleep(tick_interval)
                 except asyncio.CancelledError:
                     pass
 
             async def _worker_watch():
+                heartbeat_interval = config.worker_heartbeat_interval
                 try:
                     while True:
-                        await asyncio.sleep(2)
+                        await asyncio.sleep(heartbeat_interval)
                         target = await app.state.store.get_meta("worker_target_count", max_workers)
                         actual = len(pool._workers)
                         if target != actual:
@@ -256,11 +260,20 @@ def create_app(
             if pool:
                 await pool.stop()
                 await app.state.store.set_meta("worker_actual_count", 0)
+            if workspace_manager:
+                workspace_manager.shutdown(wait=False)
             if queue:
                 await queue.close()
             await app.state.store.set_meta("scheduler_actual_state", "stopped")
             await app.state.store.set_meta("scheduler_active", False)
             await app.state.store.close()
+            # Force shutdown the default ThreadPoolExecutor so to_thread() workers
+            # don't block uvicorn's loop.close() on Ctrl+C.
+            try:
+                loop = asyncio.get_running_loop()
+                await asyncio.wait_for(loop.shutdown_default_executor(), timeout=3.0)
+            except Exception:
+                pass
 
     app = FastAPI(title="ZeusOpen v3 Server", lifespan=lifespan)
     app.state.store = store
@@ -458,12 +471,61 @@ def create_app(
         request.app.state.bus.emit("task.progress", {"task_id": task_id, "progress": body, "source": "http"})
         return {"success": True, "task_id": task_id}
 
+    @app.get("/tasks/{task_id}/timeline")
+    async def task_timeline(
+        request: FastAPIRequest,
+        task_id: str,
+        limit: int = Query(200, ge=1, le=1000),
+    ) -> list[dict[str, Any]]:
+        store = request.app.state.store
+        task = await store.get_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        events = await store.query_events(task_id=task_id, limit=limit)
+        # Reverse to chronological order (query_events returns newest first)
+        events.reverse()
+        return events
+
+    @app.get("/tasks/{task_id}/result")
+    async def task_result(request: FastAPIRequest, task_id: str) -> dict[str, Any]:
+        store = request.app.state.store
+        task = await store.get_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        workspace_path = None
+        if task and task.get("extra"):
+            workspace_path = task.get("extra", {}).get("workspace")
+        if not workspace_path:
+            runs = await store.list_worker_runs(task_id=task_id, limit=1)
+            if runs:
+                workspace_path = runs[0].get("workspace")
+        if workspace_path:
+            wp = pathlib.Path(workspace_path)
+            result_path = wp / "zeus-result.json"
+            if result_path.exists():
+                try:
+                    return json.loads(result_path.read_text("utf-8"))
+                except (json.JSONDecodeError, OSError) as exc:
+                    raise HTTPException(status_code=500, detail=f"Failed to read result: {exc}")
+        raise HTTPException(status_code=404, detail="Result not found")
+
     # ------------------------------------------------------------------
     # Events
     # ------------------------------------------------------------------
     @app.get("/workers")
     async def list_workers(request: FastAPIRequest) -> list[dict[str, Any]]:
         return await request.app.state.store.list_active_workers()
+
+    @app.get("/workers/history")
+    async def list_worker_history(
+        request: FastAPIRequest,
+        limit: int = Query(50, ge=1, le=500),
+        offset: int = Query(0, ge=0),
+        worker_id: str | None = Query(None),
+    ) -> list[dict[str, Any]]:
+        return await request.app.state.store.list_worker_runs(
+            limit=limit, offset=offset, worker_id=worker_id
+        )
 
     @app.get("/events")
     async def list_events(
@@ -762,6 +824,7 @@ def create_app(
         old_store = request.app.state.store
         request.app.state.store = new_store
         request.app.state.control_plane.store = new_store
+        request.app.state.bus._store = new_store
         await old_store.close()
         return {
             "success": True,
@@ -778,7 +841,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--version", default="v3")
     parser.add_argument("--database-url", default=None)
     parser.add_argument("--host", default="0.0.0.0")
-    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--port", type=int, default=8234)
     return parser.parse_args(argv)
 
 

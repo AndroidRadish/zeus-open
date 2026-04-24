@@ -211,3 +211,30 @@ class AsyncStateStore(abc.ABC):
     async def list_active_workers(self) -> list[dict[str, Any]]:
         """Return active workers based on heartbeat_at and worker_id."""
         raise NotImplementedError
+
+    @abc.abstractmethod
+    async def create_worker_run(self, worker_id: str, task_id: str, workspace: str | None = None) -> int:
+        """Create a worker run record and return the generated run id."""
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    async def finish_worker_run(self, run_id: int, status: str, result_summary: str | None = None) -> None:
+        """Mark a worker run as finished, computing duration_ms from started_at."""
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    async def list_worker_runs(
+        self,
+        *,
+        worker_id: str | None = None,
+        task_id: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Return worker run history, optionally filtered by worker_id or task_id."""
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    async def get_worker_run(self, run_id: int) -> dict[str, Any] | None:
+        """Get a single worker run by id."""
+        raise NotImplementedError

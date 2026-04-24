@@ -24,7 +24,7 @@ import WorkflowGraphPanel from './WorkflowGraphPanel.vue'
 import PhasesPanel from './PhasesPanel.vue'
 import MailboxPanel from './MailboxPanel.vue'
 import MetricsPanel from './MetricsPanel.vue'
-import AgentsPanel from './AgentsPanel.vue'
+import WorkerHistoryPanel from './WorkerHistoryPanel.vue'
 import TaskDetailDrawer from './TaskDetailDrawer.vue'
 
 const { t, locale } = useI18n()
@@ -33,6 +33,7 @@ const eventStore = useEventStore()
 const uiStore = useUiStore()
 
 const projectRoot = ref('')
+const selectedRecent = ref('')
 const recentProjects = ref<string[]>([])
 
 const tabs = [
@@ -58,8 +59,9 @@ async function switchProject() {
 }
 
 function selectRecentProject(path: string) {
+  if (!path) return
   projectRoot.value = path
-  switchProject()
+  selectedRecent.value = ''
 }
 
 function setLang(lang: string) {
@@ -127,7 +129,7 @@ function onControlRefresh() {
               @keydown.enter="switchProject"
             />
             <button class="project-btn" @click="switchProject">Switch</button>
-            <select v-if="recentProjects.length" v-model="projectRoot" class="project-select" @change="selectRecentProject(projectRoot)">
+            <select v-if="recentProjects.length" v-model="selectedRecent" class="project-select" @change="selectRecentProject(selectedRecent)">
               <option value="" disabled>Recent</option>
               <option v-for="p in recentProjects" :key="p" :value="p">{{ p }}</option>
             </select>
@@ -209,7 +211,7 @@ function onControlRefresh() {
 
       <!-- Agents -->
       <section v-if="uiStore.activeTab === 'agents'" class="animate-fade-in-up">
-        <AgentsPanel />
+        <WorkerHistoryPanel />
       </section>
 
       <!-- Control -->
