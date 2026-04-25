@@ -20,7 +20,10 @@ class MemoryTaskQueue(TaskQueue):
         await self._queue.put(task)
 
     async def dequeue(self) -> dict[str, Any] | None:
-        task = await self._queue.get()
+        try:
+            task = self._queue.get_nowait()
+        except asyncio.QueueEmpty:
+            return None
         self._inflight[task["id"]] = task
         return task
 

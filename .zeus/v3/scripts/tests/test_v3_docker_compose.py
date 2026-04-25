@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 COMPOSE_FILE = Path(__file__).resolve().parent.parent.parent / "docker-compose.yml"
 PROJECT_NAME = "zeus-open-test"
-API_URL = "http://127.0.0.1:8000"
+API_URL = "http://127.0.0.1:8234"
 
 
 def _docker_available() -> bool:

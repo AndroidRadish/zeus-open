@@ -238,10 +238,10 @@ Zeus v3 provides a Vite + Vue 3 dashboard served by the built-in FastAPI server:
 Start the server:
 
 ```bash
-python .zeus/v3/scripts/run.py --mode serve --project-root . --host 0.0.0.0 --port 8000
+python .zeus/v3/scripts/run.py --mode serve --project-root . --host 0.0.0.0 --port 8234
 ```
 
-Then visit `http://127.0.0.1:8000/dashboard`.
+Then visit `http://127.0.0.1:8234/dashboard`.
 
 For the full v3 guide, see [`.zeus/v3/README.md`](.zeus/v3/README.md).
 

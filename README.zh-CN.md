@@ -226,10 +226,10 @@ Zeus v3 提供基于 Vite + Vue 3 的实时控制台，由内置 FastAPI 服务�
 启动服务：
 
 ```bash
-python .zeus/v3/scripts/run.py --mode serve --project-root . --host 0.0.0.0 --port 8000
+python .zeus/v3/scripts/run.py --mode serve --project-root . --host 0.0.0.0 --port 8234
 ```
 
-然后访问 `http://127.0.0.1:8000/dashboard`。
+然后访问 `http://127.0.0.1:8234/dashboard`。
 
 完整 v3 指南请见 [`.zeus/v3/README.zh-CN.md`](.zeus/v3/README.zh-CN.md)。
 

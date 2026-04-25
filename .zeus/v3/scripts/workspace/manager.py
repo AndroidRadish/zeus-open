@@ -19,7 +19,7 @@ class WorkspaceManager(BaseWorkspaceManager):
         ws = self.workspace_path(tid)
 
         if ws.exists():
-            await self._to_thread(shutil.rmtree, ws)
+            await self._to_thread(shutil.rmtree, str(ws))
 
         await self._copy_project(ws)
         await self._bootstrap(ws)

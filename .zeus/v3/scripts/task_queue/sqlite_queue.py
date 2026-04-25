@@ -59,19 +59,25 @@ class SqliteTaskQueue(TaskQueue):
 
     async def dequeue(self) -> dict[str, Any] | None:
         db = await self._ensure_db()
-        async with db.execute(
-            f"SELECT id, task_id, payload FROM {self._table} WHERE status = 'pending' ORDER BY id LIMIT 1"
-        ) as cursor:
-            row = await cursor.fetchone()
-        if row is None:
-            return None
-        row_id, task_id, payload = row
-        await db.execute(
-            f"UPDATE {self._table} SET status = 'inflight' WHERE id = ?",
-            (row_id,),
-        )
-        await db.commit()
-        return json.loads(payload)
+        await db.execute("BEGIN IMMEDIATE")
+        try:
+            async with db.execute(
+                f"SELECT id, task_id, payload FROM {self._table} WHERE status = 'pending' ORDER BY id LIMIT 1"
+            ) as cursor:
+                row = await cursor.fetchone()
+            if row is None:
+                await db.execute("ROLLBACK")
+                return None
+            row_id, task_id, payload = row
+            await db.execute(
+                f"UPDATE {self._table} SET status = 'inflight' WHERE id = ?",
+                (row_id,),
+            )
+            await db.commit()
+            return json.loads(payload)
+        except Exception:
+            await db.execute("ROLLBACK")
+            raise
 
     async def ack(self, task_id: str) -> None:
         db = await self._ensure_db()

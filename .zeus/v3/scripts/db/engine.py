@@ -15,7 +15,10 @@ def make_async_engine(database_url: str | None = None):
     """
     if database_url is None:
         database_url = "sqlite+aiosqlite:///./zeus_open_v3.sqlite"
-    engine = create_async_engine(database_url, echo=False, future=True)
+    kwargs: dict[str, Any] = {"echo": False, "future": True}
+    if database_url.startswith("sqlite"):
+        kwargs["connect_args"] = {"timeout": 30.0, "check_same_thread": False}
+    engine = create_async_engine(database_url, **kwargs)
     return engine
 
 

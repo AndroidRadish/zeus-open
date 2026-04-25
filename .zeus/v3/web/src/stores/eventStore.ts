@@ -26,5 +26,9 @@ export const useEventStore = defineStore('event', () => {
     if (liveEvents.value.length > 200) liveEvents.value.pop()
   }
 
-  return { liveEvents, historyEvents, loading, fetchHistory, pushLive }
+  function clearLive() {
+    liveEvents.value = []
+  }
+
+  return { liveEvents, historyEvents, loading, fetchHistory, pushLive, clearLive }
 })

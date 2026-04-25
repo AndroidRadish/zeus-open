@@ -47,7 +47,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--export-plan", action="store_true", help="Export current DB plan to task.json and exit")
     parser.add_argument("--mode", default="combined", choices=["combined", "scheduler", "worker", "serve"], help="Execution mode")
     parser.add_argument("--host", default="0.0.0.0", help="API server host")
-    parser.add_argument("--port", type=int, default=8000, help="API server port")
+    parser.add_argument("--port", type=int, default=8234, help="API server port")
     parser.add_argument("--trace", action="store_true", help="Enable OpenTelemetry console trace output")
     parser.add_argument("--embedded-scheduler", action="store_true", default=True, help="Start embedded scheduler+workers in serve mode (default: True)")
     parser.add_argument("--no-embedded-scheduler", action="store_true", default=False, help="Disable embedded scheduler in serve mode")
@@ -240,7 +240,9 @@ async def main(argv: list[str] | None = None) -> int:
     # 5. Start workers and/or scheduling loop based on mode
     ticks = 0
     idle_count = 0
-    max_idle_ticks = 10
+    max_idle_ticks = config.worker_max_idle_ticks
+    scheduler_tick_interval = config.scheduler_tick_interval
+    worker_heartbeat_interval = config.worker_heartbeat_interval
     enqueued_ids: set[str] = set()
 
     if args.mode in ("combined", "worker"):
@@ -266,7 +268,7 @@ async def main(argv: list[str] | None = None) -> int:
                 if qsize == 0 and pending == 0 and running == 0:
                     print("[Workers] no more work, exiting")
                     break
-                await asyncio.sleep(2)
+                await asyncio.sleep(worker_heartbeat_interval)
         except KeyboardInterrupt:
             print("\n[STOP] Interrupted by user")
         finally:
@@ -317,7 +319,7 @@ async def main(argv: list[str] | None = None) -> int:
                                         await scheduler.mark_global_completed()
                                         print("[Scheduler] all tasks complete, exiting")
                                         break
-                                await asyncio.sleep(0.2)
+                                await asyncio.sleep(scheduler_tick_interval)
                 except KeyboardInterrupt:
                     print("\n[STOP] Interrupted by user")
                 finally:

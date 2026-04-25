@@ -50,7 +50,7 @@ class ZeusScheduler:
                 continue
             if pass_map.get(tid, False):
                 continue
-            if t.get("status") in ("paused", "cancelled", "completed"):
+            if t.get("status") in ("paused", "cancelled", "completed", "running"):
                 continue
             if tid in quarantined_ids:
                 continue

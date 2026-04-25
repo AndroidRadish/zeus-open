@@ -42,12 +42,20 @@ class ZeusWorker:
 
     async def run(self) -> None:
         while not self._stop:
-            task = await self.queue.dequeue()
+            try:
+                task = await self.queue.dequeue()
+            except asyncio.CancelledError:
+                break
             if task is None:
-                import asyncio
-                await asyncio.sleep(0.1)
+                try:
+                    await asyncio.sleep(0.1)
+                except asyncio.CancelledError:
+                    break
                 continue
-            await self._execute(task)
+            try:
+                await self._execute(task)
+            except asyncio.CancelledError:
+                break
 
     def stop(self) -> None:
         self._stop = True

@@ -75,6 +75,14 @@ class _BaseCliDispatcher(SubagentDispatcher):
         try:
             await asyncio.wait_for(self._stream_stdout(proc, stdout_path), timeout=self.timeout_seconds)
             exit_code = await asyncio.wait_for(proc.wait(), timeout=5.0)
+        except asyncio.CancelledError:
+            # Worker pool is shutting down; kill subagent immediately
+            try:
+                proc.kill()
+                await asyncio.wait_for(proc.wait(), timeout=3.0)
+            except Exception:
+                pass
+            raise
         except asyncio.TimeoutError:
             proc.kill()
             await proc.wait()

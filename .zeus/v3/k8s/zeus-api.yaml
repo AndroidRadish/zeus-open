@@ -22,11 +22,11 @@ spec:
             - --mode=serve
             - --project-root=/app
             - --host=0.0.0.0
-            - --port=8000
+            - --port=8234
             - --queue-backend=redis
             - --redis-url=redis://redis:6379/0
           ports:
-            - containerPort: 8000
+            - containerPort: 8234
           env:
             - name: DATABASE_URL
               value: "sqlite+aiosqlite:////data/state.db"
@@ -56,4 +56,4 @@ spec:
     app: zeus-api
   ports:
     - port: 80
-      targetPort: 8000
+      targetPort: 8234

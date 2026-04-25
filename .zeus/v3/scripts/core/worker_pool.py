@@ -76,15 +76,24 @@ class WorkerPool:
             for w in excess:
                 w.stop()
 
-    async def stop(self, timeout: float = 10.0) -> None:
-        """Signal all workers to stop and await their exit."""
+    async def stop(self, timeout: float = 3.0) -> None:
+        """Signal all workers to stop and await their exit.
+
+        Default timeout is short (3s) because shutdown should be fast;
+        callers doing graceful shutdown can pass a larger value.
+        """
         self._stop = True
         for worker in self._workers:
             worker.stop()
         if self._tasks:
+            # Phase 1: wait for natural exit (workers should respond quickly
+            # to self._stop and break out of their loops)
             done, pending = await asyncio.wait(self._tasks, timeout=timeout)
-            for t in pending:
-                t.cancel()
+            # Phase 2: hard-cancel stragglers (e.g. stuck in subprocess I/O)
+            if pending:
+                for t in pending:
+                    t.cancel()
+                await asyncio.wait(pending, timeout=2.0)
             self._tasks.clear()
         self._workers.clear()
 

@@ -50,5 +50,33 @@ class ZeusConfig:
     def workspace_backend(self) -> str:
         return self._data.get("workspace", {}).get("backend", "copytree")
 
+    @property
+    def sqlite_busy_timeout(self) -> float:
+        return float(self._data.get("database", {}).get("sqlite_busy_timeout", 30.0))
+
+    @property
+    def sqlite_max_retries(self) -> int:
+        return int(self._data.get("database", {}).get("sqlite_max_retries", 3))
+
+    @property
+    def scheduler_lease_timeout(self) -> float:
+        return float(self._data.get("scheduler", {}).get("lease_timeout_seconds", 60.0))
+
+    @property
+    def scheduler_tick_interval(self) -> float:
+        return float(self._data.get("scheduler", {}).get("tick_interval", 0.2))
+
+    @property
+    def worker_max_idle_ticks(self) -> int:
+        return int(self._data.get("worker", {}).get("max_idle_ticks", 10))
+
+    @property
+    def worker_heartbeat_interval(self) -> float:
+        return float(self._data.get("worker", {}).get("heartbeat_interval", 2.0))
+
+    @property
+    def queue_retry_max(self) -> int:
+        return int(self._data.get("queue", {}).get("retry_max", 3))
+
     def raw(self) -> dict[str, Any]:
         return self._data

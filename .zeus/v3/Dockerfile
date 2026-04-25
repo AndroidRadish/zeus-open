@@ -23,7 +23,7 @@ RUN chmod +x /app/docker-entrypoint.sh
 ENV PYTHONPATH=/app/.zeus/v3/scripts
 ENV PYTHONUNBUFFERED=1
 
-EXPOSE 8000
+EXPOSE 8234
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["--mode", "combined", "--project-root", "/app"]
