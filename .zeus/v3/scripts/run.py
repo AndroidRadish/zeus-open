@@ -111,6 +111,10 @@ async def main(argv: list[str] | None = None) -> int:
         from init_project import init_project
         framework_root = Path(__file__).resolve().parent.parent.parent.parent
         created = init_project(project_root, framework_root, force=False)
+        # Ensure state.db schema is created so the project is fully bootstrapped
+        database_url = args.database_url or f"sqlite+aiosqlite:///{project_root / '.zeus' / version / 'state.db'}"
+        await ensure_schema(database_url)
+        created.append(str(project_root / ".zeus" / version / "state.db"))
         print(f"[INIT] Project initialized at {project_root}")
         for c in created:
             print(f"  + {c}")

@@ -36,16 +36,18 @@
 1. `pwd` — 确认当前在项目根目录
 2. 读取 `.zeus/ZEUS_AGENT.md` — 确认当前支持的 Zeus Agent 协议版本
 3. **优先查运行时状态（真相），后看静态配置（声明）**
-   - **v3**：先运行 `python .zeus/v3/scripts/run.py --status` 查看 `state.db`
+   - **v3**：优先用 `node .zeus/v3/scripts/state.js --status`（Node 24 内置 SQLite，零依赖）
+     - 如果 Python 可用，也可用 `python .zeus/v3/scripts/run.py --status`
      - 如果返回 0 task → 系统从未启动过，需要执行初始化（见步骤 4）
      - 如果返回 task 数据 → 以 DB 为准，task.json 仅供参考
    - **v2 / main**：`python .zeus/scripts/zeus_runner.py --status`
    - **原则**：`state.db` / `zeus_runner.py --status` 是**唯一真相**；`task.json` 只是人类声明，可能被遗忘、未加载或过期
 4. **如果是 v3 新项目初始化**，按以下顺序执行：
-   - 创建 `.zeus/v3/` 目录结构（`config.json` + `task.json`）
-   - 运行 `python .zeus/v3/scripts/run.py --import-only` 生成 `state.db`
-   - 验证：`python .zeus/v3/scripts/run.py --status` 能正常输出
-   - **注意**：`--import-only` 是 v3 初始化的必需步骤，不能省略
+   - 运行 `python .zeus/v3/scripts/run.py --project-root <项目根目录> --init` 创建 `.zeus/v3/` 目录结构（含 `config.json` + `task.json` + 空 `state.db`）
+   - 编辑 `.zeus/v3/task.json` 填入任务计划
+   - 运行 `python .zeus/v3/scripts/run.py --project-root <项目根目录> --import-only` 将任务导入 `state.db`
+   - 验证：`python .zeus/v3/scripts/run.py --project-root <项目根目录> --status` 能正常输出
+   - **注意**：`--init` 创建基础结构，`--import-only` 导入任务；两者都是首次初始化必需的步骤
 5. 读取 `claude-progress.md`（或 `.zeus/main/evolution.md`）— 了解最新状态
 6. `git log --oneline -5` — 查看最近提交
 7. 如果基础验证失败，先修复基础状态
@@ -205,6 +207,8 @@ init → discover → brainstorm → plan → execute → feedback → evolve
 
 | 目标 | 命令 |
 |---|---|
+| 查看 v3 状态（推荐） | `node .zeus/v3/scripts/state.js --status` |
+| 查看 v3 执行计划 | `node .zeus/v3/scripts/state.js --plan` |
 | 查看全局状态 | `python .zeus/scripts/zeus_runner.py --status` |
 | 查看执行计划 | `python .zeus/scripts/zeus_runner.py --plan` |
 | 执行当前 wave | `python .zeus/scripts/zeus_runner.py` |
@@ -223,7 +227,7 @@ init → discover → brainstorm → plan → execute → feedback → evolve
 - [ ] **相关验证通过**（根据「测试范围矩阵」只跑必要的验证，禁止不加区分跑全量测试）
 - [ ] Lint / 类型检查无错误
 - [ ] **v2 / main**：`task.json` 已更新（`passes: true`, `commit_sha` 已填）
-- [ ] **v3**：`state.db` 已同步（通过 `python .zeus/v3/scripts/run.py --status` 确认 task 状态为 completed，且 `zeus-result.json` 已写入 workspace）
+- [ ] **v3**：`state.db` 已同步（通过 `node .zeus/v3/scripts/state.js --status` 确认 task 状态为 completed，且 `zeus-result.json` 已写入 workspace）
 - [ ] AI log 已写入 `.zeus/main/ai-logs/`
 - [ ] 代码已 `git commit`（格式：`feat(T-001): description`）
 - [ ] `zeus_runner.py --status` 显示正常
@@ -266,7 +270,7 @@ Zeus 不再依赖 `/zeus:*` 斜杠命令。用户通过自然语言表达意图�
 
 1. 更新 `claude-progress.md`（或 `evolution.md`）
 2. **v2 / main**：更新 `task.json`（`passes` / `commit_sha`）
-3. **v3**：确认 `state.db` 已同步（通过 `python .zeus/v3/scripts/run.py --status` 或 Dashboard 验证），**禁止直接修改 `task.json` 的运行时字段**
+3. **v3**：确认 `state.db` 已同步（通过 `node .zeus/v3/scripts/state.js --status` 或 Dashboard 验证），**禁止直接修改 `task.json` 的运行时字段**
 4. 代码审查和验证
 5. `git commit`
 6. 确认状态检查命令显示正常

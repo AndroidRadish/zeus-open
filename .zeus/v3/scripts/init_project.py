@@ -102,7 +102,13 @@ def init_project(project_root: Path, framework_root: Path, force: bool = False) 
         write_json(config_path, DEFAULT_CONFIG)
         created.append(str(config_path))
 
-    # task.json.template
+    # task.json (primary working file)
+    task_json_path = zeus_dir / "task.json"
+    if not task_json_path.exists() or force:
+        write_json(task_json_path, EMPTY_TASK_TEMPLATE)
+        created.append(str(task_json_path))
+
+    # task.json.template (backup template)
     template_path = zeus_dir / "task.json.template"
     if not template_path.exists() or force:
         write_json(template_path, EMPTY_TASK_TEMPLATE)

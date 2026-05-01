@@ -27,7 +27,10 @@
 
 **v3 具体做法**：
 ```bash
-# 先看真相（state.db）
+# 先看真相（state.db）—— 推荐用 Node.js（零依赖）
+node .zeus/v3/scripts/state.js --status
+
+# 如果 Python 可用，也可用
 python .zeus/v3/scripts/run.py --status
 
 # 如果返回 0 task → 系统从未启动过，需要初始化
@@ -43,7 +46,7 @@ python .zeus/v3/scripts/run.py --status
 | 用户自然语言示例 | 识别意图 | 你的行动 |
 |---|---|---|
 | "初始化这个项目" / "Setup Zeus for this repo" / "开始吧" | **init** | 读取 `.zeus/ZEUS_AGENT.md` → 检查 `config.json` → 收集项目信息 → 写入配置 → 写 AI log |
-| "看看现在进度" / "Status?" / "到哪了" | **status** | 运行 `python .zeus/scripts/zeus_runner.py --status`（或 v3 DB 查询）→ 报告进度 |
+| "看看现在进度" / "Status?" / "到哪了" | **status** | 运行 `node .zeus/v3/scripts/state.js --status`（v3）或 `python .zeus/scripts/zeus_runner.py --status` → 报告进度 |
 | "扫一下代码库" / "Map the codebase" / "现有代码什么情况" | **discover** | 扫描代码结构 → 生成 `codebase-map.json` / `existing-modules.json` |
 | "设计一下 XX 功能" / "Brainstorm auth module" / "写个 spec" | **brainstorm** | 收集需求 → 编写 `.zeus/{version}/specs/XXXX.md` |
 | "规划一下任务" / "把 spec 拆成 task" / "Plan the next wave" | **plan** | 读 spec → 生成 story → 计算依赖 wave → 写 `task.json` |
@@ -75,7 +78,7 @@ init → discover → brainstorm → plan → execute → feedback → evolve
 7. Write AI log
 
 **status**
-1. Run `python .zeus/scripts/zeus_runner.py --status [--version v3]`
+1. Run `node .zeus/v3/scripts/state.js --status` (v3, recommended) or `python .zeus/scripts/zeus_runner.py --status`
 2. Parse output: completed / pending / running / failed counts
 3. Report in human-readable format
 4. Recommend next action based on state
@@ -167,6 +170,8 @@ If you are executing a task in an isolated workspace, write `zeus-result.json`:
 
 | Tool / Script | When to use |
 |---|---|
+| `node .zeus/v3/scripts/state.js --status` | **v3 status intent (recommended, zero-dep)** |
+| `node .zeus/v3/scripts/state.js --plan` | v3 plan preview |
 | `python .zeus/scripts/zeus_runner.py --status` | status intent |
 | `python .zeus/scripts/zeus_runner.py --plan` | plan / execute preview |
 | `python .zeus/scripts/zeus_runner.py [--wave N]` | execute intent |
