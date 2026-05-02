@@ -227,7 +227,7 @@ async def main(argv: list[str] | None = None) -> int:
 
         import uvicorn
         print(f"[SERVE] Starting API server at http://{args.host}:{args.port}")
-        config = uvicorn.Config(app, host=args.host, port=args.port, log_level="info")
+        config = uvicorn.Config(app, host=args.host, port=args.port, log_level="info", timeout_graceful_shutdown=1)
         server = uvicorn.Server(config)
         await server.serve()
         return 0
