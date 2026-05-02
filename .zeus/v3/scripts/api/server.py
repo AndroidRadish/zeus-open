@@ -264,14 +264,15 @@ def create_app(
                 workspace_manager.shutdown(wait=False)
             if queue:
                 await queue.close()
-            await app.state.store.set_meta("scheduler_actual_state", "stopped")
-            await app.state.store.set_meta("scheduler_active", False)
-            await app.state.store.close()
-            # Force shutdown the default ThreadPoolExecutor so to_thread() workers
-            # don't block uvicorn's loop.close() on Ctrl+C.
+            try:
+                await app.state.store.set_meta("scheduler_actual_state", "stopped")
+                await app.state.store.set_meta("scheduler_active", False)
+                await app.state.store.close()
+            except Exception:
+                pass
             try:
                 loop = asyncio.get_running_loop()
-                await asyncio.wait_for(loop.shutdown_default_executor(), timeout=3.0)
+                await asyncio.wait_for(loop.shutdown_default_executor(), timeout=1.0)
             except Exception:
                 pass
 

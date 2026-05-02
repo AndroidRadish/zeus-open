@@ -212,6 +212,19 @@ async def main(argv: list[str] | None = None) -> int:
             }
             print(f"[SERVE] Embedded scheduler enabled with {args.max_workers} workers")
         app = create_app(store, bus, control_plane, embedded, project_root=project_root)
+
+        # Pre-flight port check: fail fast instead of letting uvicorn hang
+        import socket
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind((args.host, args.port))
+            except OSError:
+                print(f"[FATAL] Port {args.port} already in use on {args.host}.")
+                print(f"        Find the process: netstat -ano | findstr :{args.port}")
+                print(f"        Or use --port to pick a different port.")
+                await store.close()
+                return 1
+
         import uvicorn
         print(f"[SERVE] Starting API server at http://{args.host}:{args.port}")
         config = uvicorn.Config(app, host=args.host, port=args.port, log_level="info")
