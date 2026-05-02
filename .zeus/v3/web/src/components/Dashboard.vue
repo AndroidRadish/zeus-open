@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { marked } from 'marked'
 import {
   LayoutGrid,
   ListTodo,
@@ -35,6 +36,16 @@ const uiStore = useUiStore()
 const projectRoot = ref('')
 const selectedRecent = ref('')
 const recentProjects = ref<string[]>([])
+
+const renderedLogs = computed(() => {
+  const raw = uiStore.logsModal.activity
+  if (!raw) return 'No logs available.'
+  try {
+    return marked.parse(raw) as string
+  } catch {
+    return raw
+  }
+})
 
 const tabs = [
   { key: 'overview', label: t('tabs.overview'), icon: LayoutGrid },
@@ -230,7 +241,7 @@ function onControlRefresh() {
           </div>
           <div class="modal-body custom-scrollbar">
             <div v-if="uiStore.logsModal.loading" class="modal-loading">Loading…</div>
-            <pre v-else class="modal-pre">{{ uiStore.logsModal.activity || 'No logs available.' }}</pre>
+            <div v-else class="markdown-body" v-html="renderedLogs"></div>
           </div>
         </div>
       </div>
@@ -614,14 +625,52 @@ function onControlRefresh() {
   flex: 1;
 }
 
-.modal-pre {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: 0.85rem;
-  line-height: 1.65;
-  color: #e2e8f0;
-  white-space: pre-wrap;
+.markdown-body :deep(h1),
+.markdown-body :deep(h2),
+.markdown-body :deep(h3) {
+  margin: 1.2em 0 0.5em;
+  color: #f1f5f9;
+  font-weight: 600;
 }
+.markdown-body :deep(h1) { font-size: 1.2rem; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.4em; }
+.markdown-body :deep(h2) { font-size: 1.05rem; }
+.markdown-body :deep(h3) { font-size: 0.95rem; }
+.markdown-body :deep(p) { margin: 0.5em 0; line-height: 1.65; color: #cbd5e1; }
+.markdown-body :deep(ul), .markdown-body :deep(ol) { margin: 0.4em 0; padding-left: 1.5em; }
+.markdown-body :deep(li) { margin: 0.2em 0; line-height: 1.6; color: #cbd5e1; }
+.markdown-body :deep(strong) { color: #f1f5f9; font-weight: 600; }
+.markdown-body :deep(code) {
+  font-family: var(--font-mono);
+  font-size: 0.8em;
+  background: rgba(255,255,255,0.06);
+  padding: 0.15em 0.4em;
+  border-radius: 0.3em;
+  color: #e2e8f0;
+}
+.markdown-body :deep(pre) {
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  font-family: var(--font-mono);
+  color: #e2e8f0;
+  margin: 0.6em 0;
+}
+.markdown-body :deep(pre code) {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+  color: inherit;
+}
+.markdown-body :deep(hr) { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 1.2em 0; }
+.markdown-body :deep(a) { color: var(--z-accent-cyan); text-decoration: none; }
+.markdown-body :deep(a:hover) { text-decoration: underline; }
+.markdown-body :deep(table) { width: 100%; border-collapse: collapse; margin: 0.6em 0; font-size: 0.8rem; }
+.markdown-body :deep(th), .markdown-body :deep(td) { border: 1px solid rgba(255,255,255,0.08); padding: 0.4em 0.6em; text-align: left; color: #cbd5e1; }
+.markdown-body :deep(th) { background: rgba(255,255,255,0.04); color: #f1f5f9; font-weight: 600; }
 
 .modal-loading {
   color: var(--z-text-secondary);

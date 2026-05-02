@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { X, GitBranch, FileText, Clock, Activity, Target, AlignLeft, BarChart3, ScrollText, Terminal } from 'lucide-vue-next'
+import { marked } from 'marked'
 import { useTaskStore } from '../stores/taskStore'
 
 const { t } = useI18n()
@@ -40,6 +41,14 @@ const emit = defineEmits<{
 const activeTab = ref<'details' | 'logs' | 'execution'>('details')
 const logsContent = ref('')
 const logsLoading = ref(false)
+const renderedLogs = computed(() => {
+  if (!logsContent.value) return ''
+  try {
+    return marked.parse(logsContent.value) as string
+  } catch {
+    return logsContent.value
+  }
+})
 const timeline = ref<any[]>([])
 const timelineLoading = ref(false)
 const taskResult = ref<any>(null)
@@ -266,7 +275,8 @@ function progressMessages(task: TaskDetail): string[] {
           <!-- Logs tab -->
           <div v-if="activeTab === 'logs'" class="tab-content">
             <div v-if="logsLoading" class="logs-loading">{{ t('tasks.loadingLogs') }}</div>
-            <pre v-else class="logs-pre">{{ logsContent || t('tasks.noLogs') }}</pre>
+            <div v-else-if="renderedLogs" class="markdown-body" v-html="renderedLogs"></div>
+            <div v-else class="logs-loading">{{ t('tasks.noLogs') }}</div>
           </div>
 
           <!-- Execution tab -->
@@ -567,19 +577,45 @@ function progressMessages(task: TaskDetail): string[] {
   font-size: 0.9rem;
   padding: 1rem 0;
 }
-.logs-pre {
-  background: rgba(0,0,0,0.35);
+.markdown-body :deep(h1),
+.markdown-body :deep(h2),
+.markdown-body :deep(h3) {
+  margin: 1em 0 0.4em;
+  color: #f1f5f9;
+  font-weight: 600;
+}
+.markdown-body :deep(h1) { font-size: 1.1rem; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.3em; }
+.markdown-body :deep(h2) { font-size: 1rem; }
+.markdown-body :deep(h3) { font-size: 0.9rem; }
+.markdown-body :deep(p) { margin: 0.4em 0; line-height: 1.6; color: #cbd5e1; }
+.markdown-body :deep(ul), .markdown-body :deep(ol) { margin: 0.3em 0; padding-left: 1.5em; }
+.markdown-body :deep(li) { margin: 0.15em 0; line-height: 1.55; color: #cbd5e1; }
+.markdown-body :deep(strong) { color: #f1f5f9; font-weight: 600; }
+.markdown-body :deep(code) {
+  font-family: var(--font-mono);
+  font-size: 0.8em;
+  background: rgba(255,255,255,0.06);
+  padding: 0.15em 0.4em;
+  border-radius: 0.3em;
+  color: #e2e8f0;
+}
+.markdown-body :deep(pre) {
+  background: rgba(0,0,0,0.4);
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 0.5rem;
-  padding: 0.85rem 1rem;
-  font-size: 0.78rem;
-  line-height: 1.6;
-  color: #cbd5e1;
-  white-space: pre-wrap;
-  word-break: break-word;
+  padding: 0.7rem 0.9rem;
+  overflow-x: auto;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  font-family: var(--font-mono);
+  color: #e2e8f0;
+  margin: 0.5em 0;
   max-height: 360px;
   overflow-y: auto;
 }
+.markdown-body :deep(pre code) { background: none; padding: 0; font-size: inherit; color: inherit; }
+.markdown-body :deep(hr) { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 1em 0; }
+.markdown-body :deep(a) { color: var(--z-accent-cyan); text-decoration: none; }
 
 .result-pre {
   background: rgba(0,0,0,0.35);
