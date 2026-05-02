@@ -328,8 +328,15 @@ def create_app(
         # Priority 1: ai_log_ref from DB (auto-generated ai-log file)
         if task and task.get("ai_log_ref"):
             ref = task["ai_log_ref"]
-            log_path = pathlib.Path(request.app.state.project_root) / ref
-            if log_path.exists():
+            log_path = pathlib.Path(request.app.state.project_root) / ref if request.app.state.project_root else None
+            if log_path is None or not log_path.exists():
+                # Fallback: derive project root from the database file path
+                db_url = getattr(store, "database_url", None) or ""
+                if "sqlite+aiosqlite:///" in db_url:
+                    db_path = db_url.split("sqlite+aiosqlite:///", 1)[1].split("?")[0]
+                    db_root = pathlib.Path(db_path).resolve().parent.parent.parent
+                    log_path = db_root / ref
+            if log_path and log_path.exists():
                 return PlainTextResponse(log_path.read_text("utf-8"))
 
         # Priority 2: activity.md in workspace (legacy)
