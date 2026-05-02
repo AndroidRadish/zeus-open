@@ -239,42 +239,55 @@ def create_app(
         try:
             yield
         finally:
-            if scheduler_task:
-                scheduler_task.cancel()
+            # Phase 1: cancel all running tasks immediately (no awaits)
+            tasks_to_cancel = []
+            for t in [scheduler_task, worker_watch_task, watch_task]:
+                if t:
+                    t.cancel()
+                    tasks_to_cancel.append(t)
+
+            # Phase 2: gather cleanup with a single hard deadline
+            async def _cleanup():
+                # Await cancellations (should be instant)
+                for t in tasks_to_cancel:
+                    try:
+                        await t
+                    except (asyncio.CancelledError, Exception):
+                        pass
+
+                # Stop pool
+                if pool:
+                    try:
+                        await pool.stop()
+                    except Exception:
+                        pass
+
+                # Close store
                 try:
-                    await scheduler_task
-                except asyncio.CancelledError:
+                    await app.state.store.set_meta("scheduler_actual_state", "stopped")
+                    await app.state.store.set_meta("scheduler_active", False)
+                    await app.state.store.close()
+                except Exception:
                     pass
-            if worker_watch_task:
-                worker_watch_task.cancel()
+
+                # Shutdown executor
+                if workspace_manager:
+                    workspace_manager.shutdown(wait=False)
+                if queue:
+                    try:
+                        await queue.close()
+                    except Exception:
+                        pass
                 try:
-                    await worker_watch_task
-                except asyncio.CancelledError:
+                    loop = asyncio.get_running_loop()
+                    await asyncio.wait_for(loop.shutdown_default_executor(), timeout=1.0)
+                except Exception:
                     pass
-            if watch_task:
-                watch_task.cancel()
-                try:
-                    await watch_task
-                except asyncio.CancelledError:
-                    pass
-            if pool:
-                await pool.stop()
-                await app.state.store.set_meta("worker_actual_count", 0)
-            if workspace_manager:
-                workspace_manager.shutdown(wait=False)
-            if queue:
-                await queue.close()
+
             try:
-                await app.state.store.set_meta("scheduler_actual_state", "stopped")
-                await app.state.store.set_meta("scheduler_active", False)
-                await app.state.store.close()
-            except Exception:
-                pass
-            try:
-                loop = asyncio.get_running_loop()
-                await asyncio.wait_for(loop.shutdown_default_executor(), timeout=1.0)
-            except Exception:
-                pass
+                await asyncio.wait_for(_cleanup(), timeout=2.0)
+            except asyncio.TimeoutError:
+                pass  # Timed out — exit anyway
 
     app = FastAPI(title="ZeusOpen v3 Server", lifespan=lifespan)
     app.state.store = store
