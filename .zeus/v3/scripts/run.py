@@ -211,7 +211,7 @@ async def main(argv: list[str] | None = None) -> int:
                 "config": config_obj.raw(),
             }
             print(f"[SERVE] Embedded scheduler enabled with {args.max_workers} workers")
-        app = create_app(store, bus, control_plane, embedded)
+        app = create_app(store, bus, control_plane, embedded, project_root=project_root)
         import uvicorn
         print(f"[SERVE] Starting API server at http://{args.host}:{args.port}")
         config = uvicorn.Config(app, host=args.host, port=args.port, log_level="info")
