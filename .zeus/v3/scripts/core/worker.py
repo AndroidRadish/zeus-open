@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
+from core.ai_logger import generate_ai_log
 from dispatcher.base import SubagentDispatcher
 from schemas.zeus_result import ZeusResult
 from store.base import AsyncStateStore
@@ -139,6 +140,15 @@ class ZeusWorker:
             await self.store.update_task_status(tid, "failed", passes=False, worker_id=None)
             if workspace:
                 await self.store.quarantine_task(tid, str(exc), workspace=str(workspace))
+
+            ai_log_ref = await generate_ai_log(
+                task, workspace, self.store, self.worker_id,
+                error=str(exc),
+                project_root=self.workspace_manager.project_root,
+            )
+            if ai_log_ref:
+                await self.store.update_task_status(tid, "failed", ai_log_ref=ai_log_ref)
+
             await self.queue.nack(tid, reason=str(exc))
             return
         finally:
@@ -169,6 +179,15 @@ class ZeusWorker:
             await self.store.update_task_status(tid, "failed", passes=False, worker_id=None)
             if workspace:
                 await self.store.quarantine_task(tid, f"invalid zeus-result.json: {exc}", workspace=str(workspace))
+
+            ai_log_ref = await generate_ai_log(
+                task, workspace, self.store, self.worker_id,
+                error=f"invalid zeus-result.json: {exc}",
+                project_root=self.workspace_manager.project_root,
+            )
+            if ai_log_ref:
+                await self.store.update_task_status(tid, "failed", ai_log_ref=ai_log_ref)
+
             await self.queue.nack(tid, reason=f"invalid zeus-result.json: {exc}")
             return
 
@@ -194,6 +213,14 @@ class ZeusWorker:
             if self.bus:
                 self.bus.emit("task.completed", {"task_id": tid, "worker_id": self.worker_id, "commit_sha": validated.commit_sha})
             await self.queue.ack(tid)
+
+            ai_log_ref = await generate_ai_log(
+                task, workspace, self.store, self.worker_id,
+                validated=validated,
+                project_root=self.workspace_manager.project_root,
+            )
+            if ai_log_ref:
+                await self.store.update_task_status(tid, "completed", ai_log_ref=ai_log_ref)
         else:
             await _end_run("failed", validated.artifacts.get("error", "partial_or_failed")[:200])
             await self.store.update_task_status(tid, "failed", passes=False)
@@ -208,6 +235,16 @@ class ZeusWorker:
                 self.bus.emit("task.failed", {"task_id": tid, "worker_id": self.worker_id, "status": validated.status})
             if workspace:
                 await self.store.quarantine_task(tid, validated.artifacts.get("error", "partial_or_failed"), workspace=str(workspace))
+
+            ai_log_ref = await generate_ai_log(
+                task, workspace, self.store, self.worker_id,
+                validated=validated,
+                error=validated.artifacts.get("error", "partial_or_failed"),
+                project_root=self.workspace_manager.project_root,
+            )
+            if ai_log_ref:
+                await self.store.update_task_status(tid, "failed", ai_log_ref=ai_log_ref)
+
             await self.queue.nack(tid, reason=validated.artifacts.get("error", "partial_or_failed"))
 
     def _read_zeus_result(self, workspace: Path | None) -> dict[str, Any] | None:

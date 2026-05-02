@@ -1,0 +1,51 @@
+{
+  "id": "F-001",
+  "title": "初始化与文档陈旧问题集",
+  "collected_at": "2026-05-02T13:30:00+08:00",
+  "source": "bionicrootSaaS 项目初始化",
+  "signals": [
+    {
+      "signal_id": "S-001",
+      "description": "Windows 上 greenlet DLL 加载失败，原因是系统缺少 Visual C++ Redistributable，而 greenlet 的预编译 wheel 依赖 vcruntime140.dll",
+      "severity": "blocker",
+      "task_ids": ["T-V3-001"],
+      "resolution": "安装 vc_redist.x64.exe 后解决"
+    },
+    {
+      "signal_id": "S-002",
+      "description": "AGENTS.md 和 ZEUS_AGENT.md 中 node 优先级高于 python，但大部分用户有 python 无 node",
+      "severity": "medium",
+      "task_ids": ["T-V3-010"],
+      "resolution": "回退为 python 优先，node 降级为备选"
+    },
+    {
+      "signal_id": "S-003",
+      "description": "ai-logs/ 目录为空，worker 执行后没有自动生成日志文件，全靠手动写",
+      "severity": "high",
+      "task_ids": ["T-V3-030"],
+      "resolution": "新增 core/ai_logger.py，worker 后置钩子自动生成 ai-log"
+    },
+    {
+      "signal_id": "S-004",
+      "description": "AGENTS.md 342 行线性结构，每次交互 agent 要全读一遍，其中 80% 内容与当前意图无关",
+      "severity": "medium",
+      "task_ids": ["T-V3-035"],
+      "resolution": "重构为意图路由 + 渐进式披露，典型交互只读 ~85 行"
+    },
+    {
+      "signal_id": "S-005",
+      "description": "README 以 v2 为中心，v3 标着 Beta 但所有里程碑已跑完；包含大量废弃内容（Agent 模型、测试生成、交流群二维码）",
+      "severity": "low",
+      "task_ids": ["T-V3-036"],
+      "resolution": "重写双语文档，v3 升级为主角，v2 压入旧版附录"
+    },
+    {
+      "signal_id": "S-006",
+      "description": "PROMPT.md 和 AGENTS.md 包含 Kimi 2.6 特化的 Token 效率铁律，用户已切换模型",
+      "severity": "low",
+      "task_ids": ["T-V3-020"],
+      "resolution": "清除 Kimi 特化节，只保留跨模型通用的 ai-log 精简规则"
+    }
+  ],
+  "impact": "本次初始化共暴露 6 个信号，其中 1 个 blocker（greenlet）、1 个 high（ai-log 缺失）、其余为 medium/low。全部已修复。"
+}

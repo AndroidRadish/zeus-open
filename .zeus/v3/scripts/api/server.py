@@ -279,6 +279,7 @@ def create_app(
     app.state.store = store
     app.state.bus = bus
     app.state.control_plane = control_plane
+    app.state.project_root = project_root
 
     app.add_middleware(
         CORSMiddleware,
@@ -322,6 +323,15 @@ def create_app(
     async def task_logs(request: FastAPIRequest, task_id: str) -> PlainTextResponse:
         store = request.app.state.store
         task = await store.get_task(task_id)
+
+        # Priority 1: ai_log_ref from DB (auto-generated ai-log file)
+        if task and task.get("ai_log_ref"):
+            ref = task["ai_log_ref"]
+            log_path = pathlib.Path(request.app.state.project_root) / ref
+            if log_path.exists():
+                return PlainTextResponse(log_path.read_text("utf-8"))
+
+        # Priority 2: activity.md in workspace (legacy)
         workspace_path = None
         if task and task.get("extra"):
             workspace_path = task.get("extra", {}).get("workspace")
@@ -331,6 +341,7 @@ def create_app(
             if activity_path.exists():
                 return PlainTextResponse(activity_path.read_text("utf-8"))
 
+        # Fallback: render EventLog entries
         events = await store.query_events(task_id=task_id, limit=500)
         lines = [f"# Task {task_id} Activity Log\n"]
         for ev in events:
