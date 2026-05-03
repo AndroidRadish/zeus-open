@@ -184,7 +184,41 @@ python .zeus/scripts/zeus_runner.py --status
 | DB model / store | 相关 store 测试通过 |
 | 文档 / 配置 | 语法/格式合法即可 |
 
-### 6.4 多步骤计划格式
+### 6.4 子 Agent 协作（手动分发模式）
+
+当通过 `opencode` 等工具手动 launch 子 agent 执行 task 时，走 dispatch/finalize 流程确保 DB 和日志有完整记录。
+
+**分三步：**
+
+1. **Dispatch** — 准备工作区 + 标记 running
+   ```powershell
+   python .zeus/v3/scripts/run.py --dispatch T-XXX
+   ```
+   输出 workspace 路径和 PROMPT.md 路径。
+
+2. **启动子 agent** — 把 PROMPT.md 交给子 agent 执行。子 agent 完成后**必须在 workspace 根目录写入 `zeus-result.json`**，格式：
+   ```json
+   {
+     "status": "completed",
+     "changed_files": ["src/foo.py"],
+     "test_summary": {"passed": 5, "failed": 0, "skipped": 0},
+     "commit_sha": "abc1234",
+     "artifacts": {}
+   }
+   ```
+
+3. **Finalize** — 收集成果物，生成 ai-log
+   ```powershell
+   python .zeus/v3/scripts/run.py --finalize T-XXX
+   ```
+   自动扫 workspace（优先 zeus-result.json，其次 git diff 兜底），写入 `ai-logs/` 并更新 `ai_log_ref`。
+
+**查看可分发的 task：**
+```powershell
+python .zeus/v3/scripts/run.py --dispatch-list
+```
+
+### 6.5 多步骤计划格式
 
 改动涉及多个文件时，动手前写计划：
 
@@ -207,7 +241,7 @@ python .zeus/scripts/zeus_runner.py --status
 
 > ⚠️ 如果项目没有测试、没有 lint、没有 git，跳过对应的检查项。
 
-### 6.6 常用命令
+### 6.7 常用命令
 
 ```powershell
 # 查看状态
@@ -221,6 +255,15 @@ python .zeus/v3/scripts/run.py
 
 # 执行指定 wave
 python .zeus/v3/scripts/run.py --wave 2
+
+# 手动分发 task 给子 agent
+python .zeus/v3/scripts/run.py --dispatch T-XXX
+
+# 子 agent 完成后收集结果
+python .zeus/v3/scripts/run.py --finalize T-XXX
+
+# 查看可分发 task
+python .zeus/v3/scripts/run.py --dispatch-list
 
 # 启动 Dashboard
 python .zeus/v3/scripts/run.py --mode serve --port 8234

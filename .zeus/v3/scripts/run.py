@@ -54,6 +54,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--status", action="store_true", help="Print human-readable project status and exit")
     parser.add_argument("--wave", type=int, default=None, help="Only enqueue tasks in the specified wave")
     parser.add_argument("--init", action="store_true", help="Initialize project directory with minimal Zeus v3 files and exit")
+    parser.add_argument("--dispatch", type=str, default=None, metavar="TASK_ID", help="Prepare a task for manual sub-agent execution (create workspace + mark running)")
+    parser.add_argument("--finalize", type=str, default=None, metavar="TASK_ID", help="Collect results after manual sub-agent execution (scan workspace + generate ai-log)")
+    parser.add_argument("--dispatch-list", action="store_true", help="List pending tasks whose dependencies are all satisfied")
+    parser.add_argument("--worker-id", type=str, default=None, help="Override worker ID for dispatch/finalize (default: 'zeus-dispatch')")
     return parser.parse_args(argv)
 
 
@@ -153,8 +157,66 @@ async def main(argv: list[str] | None = None) -> int:
     # 1. Ensure schema
     await ensure_schema(database_url)
 
-    # 2. Import tasks (skip auto-import in serve mode to preserve runtime state)
+    # 2. Create store
     store = SQLiteStateStore(database_url)
+
+    # 2a. Dispatch / finalize / dispatch-list — no import needed
+    if args.dispatch or args.finalize or args.dispatch_list:
+        from workspace import build_workspace_manager
+        ws_manager = build_workspace_manager(project_root, version)
+        worker_id = args.worker_id or "zeus-dispatch"
+
+        if args.dispatch_list:
+            from core.dispatch import list_dispatachable
+            ready = await list_dispatachable(store)
+            if not ready:
+                print("[DISPATCH-LIST] No ready tasks (no pending tasks with satisfied dependencies)")
+            else:
+                print(f"[DISPATCH-LIST] {len(ready)} task(s) ready for dispatch:")
+                for t in ready:
+                    deps = ", ".join(t.get("depends_on") or []) or "none"
+                    print(f"  {t['id']:10s}  wave={t.get('wave', '?')}  deps=[{deps}]  {t.get('title', '')}")
+            await store.close()
+            return 0
+
+        if args.dispatch:
+            from core.dispatch import dispatch_task
+            result = await dispatch_task(args.dispatch, store, worker_id, ws_manager)
+            if not result["ok"]:
+                print(f"[DISPATCH] Failed: {result['error']}")
+                await store.close()
+                return 1
+            t = result["task"]
+            print(f"[DISPATCH] {args.dispatch} ready for sub-agent execution")
+            print(f"   Title    : {t.get('title', '')}")
+            print(f"   Wave     : {t.get('wave', '?')}")
+            print(f"   Files    : {', '.join(t.get('files') or []) or 'N/A'}")
+            print(f"   Depends  : {', '.join(t.get('depends_on') or []) or 'none'}")
+            print(f"   Workspace: {result['workspace']}")
+            print(f"   PROMPT   : {result['prompt']}")
+            print(f"\nLaunch your sub-agent with this PROMPT file path.")
+            print(f"After it completes, run: --finalize {args.dispatch}")
+            await store.close()
+            return 0
+
+        if args.finalize:
+            from core.dispatch import finalize_task
+            result = await finalize_task(args.finalize, store, worker_id, ws_manager)
+            if not result["ok"]:
+                print(f"[FINALIZE] Failed: {result['error']}")
+                await store.close()
+                return 1
+            print(f"[FINALIZE] {args.finalize} → {result['status']}")
+            if result["changed_files"]:
+                print(f"   Changed: {', '.join(result['changed_files'][:10])}")
+                if len(result["changed_files"]) > 10:
+                    print(f"   ... and {len(result['changed_files']) - 10} more")
+            print(f"   Zeus-result: {'found' if result['has_zeus_result'] else 'not found (file diff fallback)'}")
+            print(f"   AI Log: {result['ai_log_ref'] or 'N/A'}")
+            await store.close()
+            return 0
+
+    # 2b. Import tasks (skip auto-import in serve mode to preserve runtime state)
 
     if args.status:
         await _print_status(store)
