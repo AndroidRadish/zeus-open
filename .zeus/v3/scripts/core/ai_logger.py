@@ -155,7 +155,7 @@ async def generate_ai_log(
             lines.append(f"*(showing last {MAX_STDOUT} of {len(stdout_lines)} lines)*")
             lines.append("")
             stdout_lines = stdout_lines[-MAX_STDOUT:]
-        lines.append("```")
+        lines.append("```text")
         lines.extend(stdout_lines)
         lines.append("```")
     else:

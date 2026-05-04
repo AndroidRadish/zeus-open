@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, nextTick, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { X, GitBranch, FileText, Clock, Activity, Target, AlignLeft, BarChart3, ScrollText, Terminal } from 'lucide-vue-next'
 import { marked } from 'marked'
+import 'github-markdown-css/github-markdown-dark.css'
+import hljs from 'highlight.js'
+import 'highlight.js/styles/github-dark.css'
 import { useTaskStore } from '../stores/taskStore'
 
 const { t } = useI18n()
@@ -47,6 +50,17 @@ const renderedLogs = computed(() => {
     return marked.parse(logsContent.value) as string
   } catch {
     return logsContent.value
+  }
+})
+
+const logsContainer = ref<HTMLElement | null>(null)
+
+watch(() => logsContent.value, async () => {
+  await nextTick()
+  if (logsContainer.value) {
+    logsContainer.value.querySelectorAll('pre code').forEach((el) => {
+      hljs.highlightElement(el as HTMLElement)
+    })
   }
 })
 const timeline = ref<any[]>([])
@@ -275,7 +289,7 @@ function progressMessages(task: TaskDetail): string[] {
           <!-- Logs tab -->
           <div v-if="activeTab === 'logs'" class="tab-content">
             <div v-if="logsLoading" class="logs-loading">{{ t('tasks.loadingLogs') }}</div>
-            <div v-else-if="renderedLogs" class="markdown-body" v-html="renderedLogs"></div>
+            <div v-else-if="renderedLogs" ref="logsContainer" class="markdown-body" v-html="renderedLogs"></div>
             <div v-else class="logs-loading">{{ t('tasks.noLogs') }}</div>
           </div>
 
@@ -577,45 +591,27 @@ function progressMessages(task: TaskDetail): string[] {
   font-size: 0.9rem;
   padding: 1rem 0;
 }
-.markdown-body :deep(h1),
-.markdown-body :deep(h2),
-.markdown-body :deep(h3) {
-  margin: 1em 0 0.4em;
-  color: #f1f5f9;
-  font-weight: 600;
-}
-.markdown-body :deep(h1) { font-size: 1.1rem; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.3em; }
-.markdown-body :deep(h2) { font-size: 1rem; }
-.markdown-body :deep(h3) { font-size: 0.9rem; }
-.markdown-body :deep(p) { margin: 0.4em 0; line-height: 1.6; color: #cbd5e1; }
-.markdown-body :deep(ul), .markdown-body :deep(ol) { margin: 0.3em 0; padding-left: 1.5em; }
-.markdown-body :deep(li) { margin: 0.15em 0; line-height: 1.55; color: #cbd5e1; }
-.markdown-body :deep(strong) { color: #f1f5f9; font-weight: 600; }
-.markdown-body :deep(code) {
-  font-family: var(--font-mono);
-  font-size: 0.8em;
-  background: rgba(255,255,255,0.06);
-  padding: 0.15em 0.4em;
-  border-radius: 0.3em;
-  color: #e2e8f0;
+.markdown-body {
+  font-size: 0.825rem;
+  line-height: 1.7;
 }
 .markdown-body :deep(pre) {
-  background: rgba(0,0,0,0.4);
-  border: 1px solid rgba(255,255,255,0.06);
   border-radius: 0.5rem;
-  padding: 0.7rem 0.9rem;
-  overflow-x: auto;
-  font-size: 0.75rem;
-  line-height: 1.5;
-  font-family: var(--font-mono);
-  color: #e2e8f0;
-  margin: 0.5em 0;
+  font-size: 0.78rem;
   max-height: 360px;
   overflow-y: auto;
 }
-.markdown-body :deep(pre code) { background: none; padding: 0; font-size: inherit; color: inherit; }
-.markdown-body :deep(hr) { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 1em 0; }
-.markdown-body :deep(a) { color: var(--z-accent-cyan); text-decoration: none; }
+.markdown-body :deep(code) {
+  font-size: 0.85em;
+}
+.markdown-body :deep(hr) {
+  margin: 1.5em 0;
+}
+.markdown-body :deep(h1),
+.markdown-body :deep(h2) {
+  border-bottom-color: rgba(255,255,255,0.08);
+  padding-bottom: 0.3em;
+}
 
 .result-pre {
   background: rgba(0,0,0,0.35);
