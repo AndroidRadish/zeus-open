@@ -63,29 +63,36 @@ async def dispatch_task(
         payload={"workspace": workspace_path},
     )
 
-    # Build copy-paste instruction for the sub-agent
+    # Build copy-paste instruction for the sub-agent (NOT an f-string to avoid brace hell)
     files = task.get("files") or []
     files_str = ", ".join(files) if files else "N/A"
     deps = task.get("depends_on") or []
     deps_str = ", ".join(deps) if deps else "none"
+    title = task.get("title", "")
+    desc = task.get("description", "")
+    wave = task.get("wave", "?")
     agent_instruction = (
-        f"## Task: {task_id} — {task.get('title', '')}\n\n"
-        f"{task.get('description', '')}\n\n"
-        f"**Files**: {files_str}\n"
-        f"**Depends**: {deps_str}\n"
-        f"**Wave**: {task.get('wave', '?')}\n\n"
-        f"### Execution Steps\n\n"
-        f"1. Read the involved files and understand the codebase.\n"
-        f"2. Implement the changes described above.\n"
-        f"3. **After each significant step**, append a progress line to progress.jsonl in the workspace root:\n"
-        f'   `{{"ts": "<ISO timestamp>", "step": "<planning|reading|writing|testing|completed>", "message": "<what you did>"}}`\n'
-        f"4. Run relevant tests or build to verify.\n"
-        f"5. **When done**, write zeus-result.json in the workspace root:\n"
-        f'   `{{"status": "completed", "changed_files": ["path/to/file1", "path/to/file2"], "test_summary": {{"passed": N, "failed": 0, "skipped": 0}}, "commit_sha": "abc1234", "artifacts": {{}}}}`\n"
-        f"6. All done — the orchestrator will pick up the result.\n\n"
-        f"### Workspace\n"
-        f"{workspace_path}\n"
-    )
+        "## Task: {tid} \u2014 {t}\n\n"
+        "{d}\n\n"
+        "**Files**: {f}\n"
+        "**Depends**: {dp}\n"
+        "**Wave**: {w}\n\n"
+        "### Execution Steps\n\n"
+        "1. Read the involved files and understand the codebase.\n"
+        "2. Implement the changes described above.\n"
+        "3. **After each significant step**, append a progress line to progress.jsonl "
+        'in the workspace root:\n'
+        '   `{{"ts": "<ISO timestamp>", "step": "<planning|reading|writing|testing|completed>", '
+        '"message": "<what you did>"}}`\n'
+        "4. Run relevant tests or build to verify.\n"
+        "5. **When done**, write zeus-result.json in the workspace root:\n"
+        '   `{{"status": "completed", "changed_files": ["path/to/file1", "path/to/file2"], '
+        '"test_summary": {{"passed": N, "failed": 0, "skipped": 0}}, '
+        '"commit_sha": "abc1234", "artifacts": {{}}}}`\n'
+        "6. All done \u2014 the orchestrator will pick up the result.\n\n"
+        "### Workspace\n"
+        "{ws}\n"
+    ).format(tid=task_id, t=title, d=desc, f=files_str, dp=deps_str, w=wave, ws=workspace_path)
 
     return {
         "ok": True,

@@ -161,10 +161,9 @@ async def main(argv: list[str] | None = None) -> int:
     # 2. Create store
     store = SQLiteStateStore(database_url)
 
-    # 2a. Dispatch / finalize / dispatch-list — no import needed
-    if args.dispatch or args.finalize or args.dispatch_list:
+    # 2a. Dispatch / finalize / dispatch-list / wave-advance — no import needed
+    if args.dispatch or args.finalize or args.dispatch_list or args.wave_advance is not None:
         from workspace import build_workspace_manager
-        ws_manager = build_workspace_manager(project_root, version)
         worker_id = args.worker_id or "zeus-dispatch"
 
         if args.dispatch_list:
@@ -179,6 +178,9 @@ async def main(argv: list[str] | None = None) -> int:
                     print(f"  {t['id']:10s}  wave={t.get('wave', '?')}  deps=[{deps}]  {t.get('title', '')}")
             await store.close()
             return 0
+
+        if args.dispatch or args.finalize:
+            ws_manager = build_workspace_manager(project_root, version)
 
         if args.dispatch:
             from core.dispatch import dispatch_task
