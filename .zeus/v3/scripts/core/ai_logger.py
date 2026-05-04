@@ -90,87 +90,99 @@ async def generate_ai_log(
 
     # 6. Compose markdown
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    lines: list[str] = [
-        f"# AI Log: {task_id} — {title}",
-        "",
-        f"- **Task**: {task_id}",
-        f"- **Title**: {title}",
-        f"- **Status**: {status}",
-        f"- **Worker**: {worker_id}",
-        f"- **Timestamp**: {now}",
-        "",
-    ]
+    lines: list[str] = []
 
+    # -------- Header --------
+    badge = "✅" if status == "completed" else "❌"
+    lines.append(f"# {task_id} — {title}")
+    lines.append("")
+
+    # Metadata table
+    lines.append("| | |")
+    lines.append("|---|---|")
+    lines.append(f"| **Status** | {badge} {status} |")
+    lines.append(f"| **Worker** | `{worker_id}` |")
+    lines.append(f"| **Timestamp** | `{now}` |")
     if commit_sha:
-        lines.append(f"- **Commit**: {commit_sha}")
-        lines.append("")
-
-    lines.append("---")
-    lines.append("")
-    lines.append("## Execution Summary")
-    lines.append("")
-
-    if error:
-        lines.append(f"**Error**: {error}")
-        lines.append("")
-
-    if changed_files:
-        lines.append(f"**Changed Files**: {', '.join(changed_files)}")
-        lines.append("")
-
+        lines.append(f"| **Commit** | `{commit_sha}` |")
+    passed = test_summary.get("passed", "?")
+    failed = test_summary.get("failed", "?")
+    skipped = test_summary.get("skipped", "?")
     if test_summary:
-        lines.append(f"**Test Summary**: {json.dumps(test_summary, ensure_ascii=False)}")
+        lines.append(f"| **Tests** | {passed} passed / {failed} failed / {skipped} skipped |")
+    lines.append(f"| **Files** | {len(changed_files)} changed |")
+    if error:
+        lines.append(f"| **Error** | {error} |")
+    lines.append("")
+
+    # -------- Error callout (if failed) --------
+    if error:
+        lines.append("> **⚠️ Error**")
+        lines.append(">")
+        for line_text in error.splitlines():
+            lines.append(f"> {line_text}")
         lines.append("")
 
+    # -------- Changed Files --------
+    if changed_files:
+        lines.append("## 📦 Changed Files")
+        lines.append("")
+        # Group by extension for visual organization
+        for cf in changed_files:
+            lines.append(f"- `{cf}`")
+        lines.append("")
+
+    # -------- Execution Summary --------
+    lines.append("## 📋 Execution Summary")
+    lines.append("")
+    if test_summary:
+        total = passed + failed + skipped
+        rate = f"{passed / total * 100:.0f}%" if total > 0 else "N/A"
+        lines.append(f"- **Test Results**: {rate} pass rate ({passed}/{total})")
     if result_artifacts:
-        lines.append("**Artifacts**:")
+        lines.append("- **Artifacts**:")
         for k, v in result_artifacts.items():
-            lines.append(f"  - {k}: {v}")
-        lines.append("")
+            lines.append(f"  - `{k}`: {v}")
+    if commit_sha:
+        lines.append(f"- **Commit**: `{commit_sha}`")
+    lines.append("")
 
-    # Progress steps
-    lines.append("---")
-    lines.append("")
-    lines.append("## Progress Steps")
-    lines.append("")
+    # -------- Progress Steps --------
     if progress_steps:
+        lines.append("## 📈 Progress Steps")
+        lines.append("")
+        lines.append("| Timestamp | Step | Message |")
+        lines.append("|---|---|---|")
         for ps in progress_steps:
             ts = ps.get("ts", "")
             step = ps.get("step", "")
             msg = ps.get("message", "")
-            lines.append(f"- **{ts}** — *{step}*: {msg}" if ts and step else f"- {json.dumps(ps, ensure_ascii=False)}")
-        lines.append("")
-    else:
-        lines.append("*(no progress steps recorded)*")
+            lines.append(f"| `{ts}` | `{step}` | {msg} |")
         lines.append("")
 
-    # Raw stdout (truncated to last 200 lines)
-    lines.append("---")
-    lines.append("")
-    lines.append("## Agent Output")
-    lines.append("")
+    # -------- Agent Output --------
     if stdout_lines:
+        lines.append("## 💬 Agent Output")
+        lines.append("")
         MAX_STDOUT = 200
         if len(stdout_lines) > MAX_STDOUT:
-            lines.append(f"*(showing last {MAX_STDOUT} of {len(stdout_lines)} lines)*")
+            lines.append(f"> Showing last {MAX_STDOUT} of {len(stdout_lines)} lines.")
             lines.append("")
             stdout_lines = stdout_lines[-MAX_STDOUT:]
-        lines.append("```text")
+        lines.append("```ansi")
         lines.extend(stdout_lines)
         lines.append("```")
-    else:
-        lines.append("*(no stdout captured)*")
-    lines.append("")
+        lines.append("")
 
-    # Event timeline
-    lines.append("---")
-    lines.append("")
-    lines.append("## Event Timeline")
+    # -------- Event Timeline --------
+    lines.append("## 📡 Event Timeline")
     lines.append("")
     if events:
+        lines.append("| Time | Event | Details |")
+        lines.append("|---|---|---|")
         for ev in events:
-            et = ev.get("event_type", "?")
-            ts = ev.get("ts", "")
+            et = ev.get("event_type", "")
+            ts = ev.get("ts", "") or ""
             payload = ev.get("payload", {})
             payload_str = ""
             if payload:
@@ -178,17 +190,37 @@ async def generate_ai_log(
                     payload_str = json.dumps(payload, ensure_ascii=False)
                 except Exception:
                     payload_str = str(payload)
-            lines.append(f"- **{ts}** — `{et}` {payload_str}")
+            # Truncate long payloads in table
+            display = payload_str[:120] + "..." if len(payload_str) > 120 else payload_str
+            lines.append(f"| `{ts}` | `{et}` | `{display}` |")
     else:
         lines.append("*(no events recorded)*")
     lines.append("")
 
-    # Decision Rationale (placeholder since we can't know the agent's reasoning)
+    # -------- Raw Event Payloads (expandable) --------
+    if events:
+        lines.append("<details>")
+        lines.append("<summary>Raw Event Payloads</summary>")
+        lines.append("")
+        lines.append("```json")
+        payloads = []
+        for ev in events:
+            ts = ev.get("ts", "")
+            et = ev.get("event_type", "")
+            payload = ev.get("payload", {})
+            payloads.append({ts: {"event": et, "payload": payload}})
+        lines.append(json.dumps(payloads, ensure_ascii=False, indent=2))
+        lines.append("```")
+        lines.append("")
+        lines.append("</details>")
+        lines.append("")
+
+    # -------- Decision Rationale --------
     lines.append("---")
     lines.append("")
-    lines.append("## Decision Rationale")
+    lines.append("## 🧠 Decision Rationale")
     lines.append("")
-    lines.append("*(auto-generated from execution artifacts)*")
+    lines.append("*Auto-generated from execution artifacts.*")
     lines.append("")
 
     content = "\n".join(lines)
