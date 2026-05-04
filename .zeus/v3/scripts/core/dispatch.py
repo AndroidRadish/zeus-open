@@ -63,12 +63,37 @@ async def dispatch_task(
         payload={"workspace": workspace_path},
     )
 
+    # Build copy-paste instruction for the sub-agent
+    files = task.get("files") or []
+    files_str = ", ".join(files) if files else "N/A"
+    deps = task.get("depends_on") or []
+    deps_str = ", ".join(deps) if deps else "none"
+    agent_instruction = (
+        f"## Task: {task_id} — {task.get('title', '')}\n\n"
+        f"{task.get('description', '')}\n\n"
+        f"**Files**: {files_str}\n"
+        f"**Depends**: {deps_str}\n"
+        f"**Wave**: {task.get('wave', '?')}\n\n"
+        f"### Execution Steps\n\n"
+        f"1. Read the involved files and understand the codebase.\n"
+        f"2. Implement the changes described above.\n"
+        f"3. **After each significant step**, append a progress line to progress.jsonl in the workspace root:\n"
+        f'   `{{"ts": "<ISO timestamp>", "step": "<planning|reading|writing|testing|completed>", "message": "<what you did>"}}`\n'
+        f"4. Run relevant tests or build to verify.\n"
+        f"5. **When done**, write zeus-result.json in the workspace root:\n"
+        f'   `{{"status": "completed", "changed_files": ["path/to/file1", "path/to/file2"], "test_summary": {{"passed": N, "failed": 0, "skipped": 0}}, "commit_sha": "abc1234", "artifacts": {{}}}}`\n"
+        f"6. All done — the orchestrator will pick up the result.\n\n"
+        f"### Workspace\n"
+        f"{workspace_path}\n"
+    )
+
     return {
         "ok": True,
         "task": task,
         "workspace": workspace_path,
         "prompt": prompt_path,
         "run_id": run_id,
+        "agent_instruction": agent_instruction,
     }
 
 
@@ -173,13 +198,75 @@ async def finalize_task(
     if ai_log_ref:
         await store.update_task_status(task_id, status, ai_log_ref=ai_log_ref)
 
+    # Auto-advance current_wave if this task was the last in its wave
+    advanced_to = await _advance_wave_if_done(store, task)
+
     return {
         "ok": True,
         "status": status,
         "changed_files": changed_files,
         "has_zeus_result": zeus_result is not None,
         "ai_log_ref": ai_log_ref,
+        "advanced_to_wave": advanced_to,
     }
+
+
+async def _advance_wave_if_done(
+    store: AsyncStateStore,
+    completed_task: dict[str, Any],
+) -> int | None:
+    """If all tasks in the completed task's wave are done, advance current_wave."""
+    wave = completed_task.get("wave")
+    if wave is None:
+        return None
+
+    tasks_in_wave = await store.list_tasks(wave=wave)
+    remaining = [t for t in tasks_in_wave if t.get("status") != "completed"]
+    if remaining:
+        return None  # still have pending/running tasks in this wave
+
+    # All done in this wave — find next wave with pending tasks
+    all_tasks = await store.list_tasks()
+    waves = sorted(set(t.get("wave") for t in all_tasks if t.get("wave") is not None))
+    current = await store.get_meta("current_wave", 1)
+
+    for w in waves:
+        if w <= current:
+            continue
+        wave_tasks = [t for t in all_tasks if t.get("wave") == w]
+        pending = [t for t in wave_tasks if t.get("status") == "pending"]
+        failed = [t for t in wave_tasks if t.get("status") == "failed"]
+        if pending or failed:
+            await store.set_meta("current_wave", w)
+            return w
+
+    return None
+
+
+async def advance_wave(
+    store: AsyncStateStore,
+    target_wave: int | None = None,
+) -> dict[str, Any]:
+    """Manually advance current_wave to a target wave or the next wave with work."""
+    current = await store.get_meta("current_wave", 1)
+    all_tasks = await store.list_tasks()
+
+    if target_wave:
+        await store.set_meta("current_wave", target_wave)
+        return {"ok": True, "from": current, "to": target_wave}
+
+    # Auto-find next wave with pending/failed tasks
+    waves = sorted(set(t.get("wave") for t in all_tasks if t.get("wave") is not None))
+    for w in waves:
+        if w <= current:
+            continue
+        wave_tasks = [t for t in all_tasks if t.get("wave") == w]
+        has_work = any(t.get("status") in ("pending", "failed") for t in wave_tasks)
+        if has_work:
+            await store.set_meta("current_wave", w)
+            return {"ok": True, "from": current, "to": w}
+
+    return {"ok": False, "error": "No next wave with work found", "from": current}
 
 
 async def list_dispatachable(

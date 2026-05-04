@@ -194,9 +194,13 @@ python .zeus/scripts/zeus_runner.py --status
    ```powershell
    python .zeus/v3/scripts/run.py --dispatch T-XXX
    ```
-   输出 workspace 路径和 PROMPT.md 路径。
+   输出 workspace 路径和一条**可复制给子 agent 的指令**，包含任务描述、涉及文件、进度上报要求。
 
-2. **启动子 agent** — 把 PROMPT.md 交给子 agent 执行。子 agent 完成后**必须在 workspace 根目录写入 `zeus-result.json`**，格式：
+2. **启动子 agent** — 把 dispatch 输出的指令复制给子 agent。子 agent 在执行过程中应**每完成一个步骤向 workspace 的 `progress.jsonl` 追加一行**：
+   ```json
+   {"ts": "2026-05-04T15:30:00Z", "step": "writing", "message": "正在实现登录逻辑"}
+   ```
+   最终**必须在 workspace 根目录写入 `zeus-result.json`**：
    ```json
    {
      "status": "completed",
@@ -227,7 +231,7 @@ python .zeus/v3/scripts/run.py --dispatch-list
 2. [步骤] → 验证：[如何确认这一步成功]
 ```
 
-### 6.5 完成定义
+### 6.6 完成定义
 
 以下条件同时满足才算 done：
 
@@ -235,11 +239,12 @@ python .zeus/v3/scripts/run.py --dispatch-list
 - [ ] 相关验证已通过（见 §6.3）
 - [ ] Lint / 类型检查无错误（如有配置）
 - [ ] `state.db` 已同步（`run.py --status` 确认 task 为 completed）
-- [ ] ai-log 已写入 `.zeus/v3/ai-logs/`
 - [ ] diff 自检通过（每一行改动都能追溯到当前 task）
 - [ ] 已 `git commit`（格式：`feat(T-001): description`）（如有 git）
 
 > ⚠️ 如果项目没有测试、没有 lint、没有 git，跳过对应的检查项。
+
+**> 完成以上步骤后，必须运行 `--finalize` 或确保 ai-log 已写入 `.zeus/{version}/ai-logs/{task_id}.md`。这是任务的最后一步，漏掉等于没完成。**
 
 ### 6.7 常用命令
 

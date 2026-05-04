@@ -57,6 +57,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--dispatch", type=str, default=None, metavar="TASK_ID", help="Prepare a task for manual sub-agent execution (create workspace + mark running)")
     parser.add_argument("--finalize", type=str, default=None, metavar="TASK_ID", help="Collect results after manual sub-agent execution (scan workspace + generate ai-log)")
     parser.add_argument("--dispatch-list", action="store_true", help="List pending tasks whose dependencies are all satisfied")
+    parser.add_argument("--wave-advance", type=int, default=None, const=0, nargs="?", metavar="WAVE", help="Advance current_wave to the next wave with work, or to a specific wave number")
     parser.add_argument("--worker-id", type=str, default=None, help="Override worker ID for dispatch/finalize (default: 'zeus-dispatch')")
     return parser.parse_args(argv)
 
@@ -194,8 +195,13 @@ async def main(argv: list[str] | None = None) -> int:
             print(f"   Depends  : {', '.join(t.get('depends_on') or []) or 'none'}")
             print(f"   Workspace: {result['workspace']}")
             print(f"   PROMPT   : {result['prompt']}")
-            print(f"\nLaunch your sub-agent with this PROMPT file path.")
-            print(f"After it completes, run: --finalize {args.dispatch}")
+            print()
+            print("─" * 50)
+            print("Copy the following to your sub-agent:")
+            print("─" * 50)
+            print(result.get("agent_instruction", ""))
+            print("─" * 50)
+            print(f"After sub-agent completes, run: --finalize {args.dispatch}")
             await store.close()
             return 0
 
@@ -213,6 +219,19 @@ async def main(argv: list[str] | None = None) -> int:
                     print(f"   ... and {len(result['changed_files']) - 10} more")
             print(f"   Zeus-result: {'found' if result['has_zeus_result'] else 'not found (file diff fallback)'}")
             print(f"   AI Log: {result['ai_log_ref'] or 'N/A'}")
+            if result.get("advanced_to_wave"):
+                print(f"   Wave advanced to: {result['advanced_to_wave']}")
+            await store.close()
+            return 0
+
+        if args.wave_advance is not None:
+            from core.dispatch import advance_wave
+            target = args.wave_advance if args.wave_advance > 0 else None
+            result2 = await advance_wave(store, target_wave=target)
+            if not result2["ok"]:
+                print(f"[WAVE-ADVANCE] {result2['error']}")
+            else:
+                print(f"[WAVE-ADVANCE] current_wave: {result2['from']} → {result2['to']}")
             await store.close()
             return 0
 
