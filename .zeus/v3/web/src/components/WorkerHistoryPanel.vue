@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Activity, Cpu, History } from 'lucide-vue-next'
+import { Activity, Cpu, History, FileText } from 'lucide-vue-next'
 import { useTaskStore } from '../stores/taskStore'
+import { useUiStore } from '../stores/uiStore'
 
 const { t } = useI18n()
 const taskStore = useTaskStore()
+const uiStore = useUiStore()
 
 const activeWorkers = computed(() => taskStore.workers || [])
 const history = computed(() => taskStore.workerHistory || [])
@@ -113,6 +115,7 @@ onMounted(() => {
               <th>{{ t('agents.startedAt') }}</th>
               <th>{{ t('agents.endedAt') }}</th>
               <th>{{ t('agents.result') }}</th>
+              <th class="th-logs"></th>
             </tr>
           </thead>
           <tbody>
@@ -134,9 +137,14 @@ onMounted(() => {
                 </span>
                 <span v-else class="muted">—</span>
               </td>
+              <td>
+                <button class="btn-log" :title="t('actions.logs')" @click="uiStore.openLogs(run.task_id)">
+                  <FileText :size="14" />
+                </button>
+              </td>
             </tr>
             <tr v-if="history.length === 0">
-              <td colspan="7" class="empty-cell">{{ t('agents.empty') }}</td>
+              <td colspan="8" class="empty-cell">{{ t('agents.empty') }}</td>
             </tr>
           </tbody>
         </table>
@@ -360,6 +368,30 @@ onMounted(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
   display: inline-block;
+}
+
+.th-logs {
+  width: 48px;
+}
+
+.btn-log {
+  appearance: none;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  color: var(--z-text-secondary);
+  width: 32px;
+  height: 32px;
+  border-radius: 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-log:hover {
+  background: rgba(255,255,255,0.08);
+  color: var(--z-accent-cyan);
+  border-color: rgba(34,211,238,0.25);
 }
 
 .status-pill {
