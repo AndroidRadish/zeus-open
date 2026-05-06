@@ -165,12 +165,12 @@ def create_app(
             dispatcher_cfg = embedded_runner.get("config", config.raw())
 
             if queue_backend == "sqlite":
-                queue = SqliteTaskQueue(str(runner_root / ".zeus" / version / "queue.sqlite"))
+                queue = SqliteTaskQueue(str(runner_root / ".zeus" / version / "queue.sqlite"), max_retries=config.queue_retry_max)
             elif queue_backend == "redis" and redis_url:
                 from task_queue.redis_queue import RedisTaskQueue
                 queue = RedisTaskQueue(redis_url)
             else:
-                queue = MemoryTaskQueue()
+                queue = MemoryTaskQueue(max_retries=config.queue_retry_max)
 
             dispatcher = build_dispatcher(dispatcher_cfg)
             workspace_manager = build_workspace_manager(runner_root, version)

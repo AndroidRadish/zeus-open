@@ -5,6 +5,7 @@ Useful when Redis is unavailable but persistence is still required.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any
 
@@ -16,9 +17,10 @@ from task_queue.base import TaskQueue
 class SqliteTaskQueue(TaskQueue):
     """Persistent queue backed by SQLite."""
 
-    def __init__(self, db_path: str = "./zeus_v3_queue.sqlite", table_name: str = "task_queue") -> None:
+    def __init__(self, db_path: str = "./zeus_v3_queue.sqlite", table_name: str = "task_queue", max_retries: int = 3) -> None:
         self._db_path = db_path
         self._table = table_name
+        self._max_retries = max_retries
         self._db: aiosqlite.Connection | None = None
 
     async def _ensure_db(self) -> aiosqlite.Connection:
@@ -94,13 +96,15 @@ class SqliteTaskQueue(TaskQueue):
             return
         retry_count, payload = row
         retry_count = (retry_count or 0) + 1
-        if retry_count > 3:
+        if retry_count > self._max_retries:
             await db.execute(
                 f"INSERT OR REPLACE INTO {self._table}_dead (task_id, payload, reason) VALUES (?, ?, ?)",
                 (task_id, payload, reason),
             )
             await db.execute(f"DELETE FROM {self._table} WHERE task_id = ?", (task_id,))
         else:
+            backoff = min(retry_count ** 2, 30) * 0.1
+            await asyncio.sleep(backoff)
             await db.execute(
                 f"UPDATE {self._table} SET status = 'pending', retry_count = ? WHERE task_id = ?",
                 (retry_count, task_id),

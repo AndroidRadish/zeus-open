@@ -319,13 +319,13 @@ async def main(argv: list[str] | None = None) -> int:
     config = ZeusConfig(project_root, version)
 
     if args.queue_backend == "sqlite":
-        queue = SqliteTaskQueue(str(project_root / ".zeus" / version / "queue.sqlite"))
+        queue = SqliteTaskQueue(str(project_root / ".zeus" / version / "queue.sqlite"), max_retries=config.queue_retry_max)
     elif args.queue_backend == "redis":
         redis_url = args.redis_url or config.raw().get("queue", {}).get("redis_url", "redis://localhost:6379/0")
         from task_queue.redis_queue import RedisTaskQueue
         queue = RedisTaskQueue(redis_url)
     else:
-        queue = MemoryTaskQueue()
+        queue = MemoryTaskQueue(max_retries=config.queue_retry_max)
 
     dispatcher_cfg = config.raw()
     if args.dispatcher:
