@@ -362,17 +362,103 @@ def create_app(
             if activity_path.exists():
                 return PlainTextResponse(activity_path.read_text("utf-8"))
 
-        # Fallback: render EventLog entries
+        # Fallback: render EventLog entries with grouping and dedup
         events = await store.query_events(task_id=task_id, limit=500)
-        lines = [f"# Task {task_id} Activity Log\n"]
+        if not events:
+            return PlainTextResponse(f"# Task {task_id}\nNo logs available.")
+
+        # Group consecutive runs by splitting on task.started
+        runs: list[list[dict]] = []
+        current: list[dict] = []
         for ev in events:
-            ts = ev.get("ts", "")
-            et = ev.get("event_type", "")
-            payload = ev.get("payload", {})
-            lines.append(f"## {ts} — {et}")
-            lines.append(json.dumps(payload, ensure_ascii=False, indent=2))
+            if ev.get("event_type") == "task.started" and current:
+                runs.append(current)
+                current = []
+            current.append(ev)
+        if current:
+            runs.append(current)
+
+        lines: list[str] = [
+            f"# Task {task_id} \u2014 Activity Log",
+            "",
+        ]
+
+        # Summary bar
+        status = task.get("status", "unknown") if task else "unknown"
+        total_attempts = len(runs)
+        first_event = events[-1] if events else {}
+        last_event = events[0] if events else {}
+        completed_count = sum(1 for r in runs if "task.completed" in {e.get("event_type", "") for e in r})
+        failed_count = sum(1 for r in runs if "task.failed" in {e.get("event_type", "") for e in r})
+
+        lines.append(f"> **Status**: {status}  |  **Attempts**: {total_attempts} "
+                     f"({completed_count} completed, {failed_count} failed)")
+        lines.append(f"> **First**: {first_event.get('ts', '')}  |  **Last**: {last_event.get('ts', '')}")
+        lines.append("")
+
+        # Dedup: collapse consecutive identical failures
+        deduped: list[dict] = []
+        for run in runs:
+            types = [e.get("event_type", "") for e in run]
+            outcome = ("completed" if "task.completed" in types else
+                       "failed" if "task.failed" in types else
+                       "in_progress" if "task.progress" in types else "unknown")
+            error = ""
+            for e in run:
+                if e.get("event_type") == "task.failed":
+                    error = (e.get("payload") or {}).get("error", "")
+                    break
+            signature = (outcome, error)
+
+            if deduped and deduped[-1]["signature"] == signature and outcome != "completed":
+                deduped[-1]["count"] += 1
+            else:
+                deduped.append({"run": run, "outcome": outcome, "error": error,
+                                "signature": signature, "count": 1})
+
+        for i, group in enumerate(deduped):
+            run = group["run"]
+            outcome = group["outcome"]
+            error = group["error"]
+            count = group["count"]
+            is_last = i == len(deduped) - 1
+
+            badge = "\u2705" if outcome == "completed" else "\u274c" if outcome == "failed" else "\u23f3"
+            run_start = run[0].get("ts", "") if run else ""
+            run_end = run[-1].get("ts", "") if run else ""
+            label = f"Attempt (x{count})" if count > 1 else "Attempt"
+
+            collapsed = count > 1 and outcome == "failed"
+            lines.append(f"<details {'open' if is_last and not collapsed else ''}>")
+
+            if count > 1 and outcome == "failed":
+                short_err = (error[:80] + "\u2026") if len(error) > 80 else error
+                lines.append(f"<summary><b>{label}</b> {badge} — {outcome} (\u00d7{count}, same error) — {run_start}</summary>")
+            else:
+                lines.append(f"<summary><b>{label}</b> {badge} — {outcome} — {run_start}</summary>")
             lines.append("")
-        return PlainTextResponse("\n".join(lines) if lines else f"# Task {task_id}\nNo logs available.")
+
+            if count == 1 or outcome == "completed":
+                for ev in run:
+                    et = ev.get("event_type", "")
+                    ts = ev.get("ts", "") or ""
+                    payload = ev.get("payload", {})
+
+                    if et == "task.started":
+                        lines.append(f"> `{ts}` **started**")
+                        continue
+
+                    label_et = et.replace("task.", "")
+                    payload_str = json.dumps(payload, ensure_ascii=False) if payload else ""
+                    if payload_str == "{}":
+                        payload_str = ""
+                    lines.append(f"> `{ts}` **{label_et}** {payload_str}")
+
+            lines.append("")
+            lines.append("</details>")
+            lines.append("")
+
+        return PlainTextResponse("\n".join(lines))
 
     @app.get("/tasks/{task_id}")
     async def get_task(request: FastAPIRequest, task_id: str) -> dict[str, Any]:
