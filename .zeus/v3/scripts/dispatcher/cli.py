@@ -192,6 +192,9 @@ class AutoSubagentDispatcher(SubagentDispatcher):
         elif shutil.which("claude"):
             dispatcher = ClaudeSubagentDispatcher(timeout_seconds=self.timeout_seconds)
         else:
+            _tid = task.get("id", "?")
+            print(f"[WARN] No kimi or claude CLI found — falling back to mock for {_tid}")
+            print(f"[WARN]   Set dispatcher to 'human' in config.json to await manual execution instead.")
             dispatcher = __import__("dispatcher.mock", fromlist=["MockSubagentDispatcher"]).MockSubagentDispatcher()
         return await dispatcher.run(task, workspace, prompt, bus=bus)
 
@@ -219,4 +222,7 @@ def build_dispatcher(config: dict[str, Any] | None = None) -> SubagentDispatcher
     if mode == "mock":
         from dispatcher.mock import MockSubagentDispatcher
         return MockSubagentDispatcher()
+    if mode == "human":
+        from dispatcher.human import HumanSubagentDispatcher
+        return HumanSubagentDispatcher()
     return AutoSubagentDispatcher(timeout_seconds=timeout)

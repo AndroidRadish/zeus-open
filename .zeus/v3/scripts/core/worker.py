@@ -191,6 +191,11 @@ class ZeusWorker:
             await self.queue.nack(tid, reason=f"invalid zeus-result.json: {exc}")
             return
 
+        if validated.status == "pending":
+            await _end_run("pending", "manual execution required")
+            await self.queue.ack(tid)
+            return
+
         if validated.status == "completed":
             summary = f"commit: {validated.commit_sha}"[:200] if validated.commit_sha else "completed"
             await _end_run("completed", summary)

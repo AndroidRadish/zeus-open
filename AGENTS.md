@@ -172,6 +172,11 @@ python .zeus/scripts/zeus_runner.py --status
 - `.zeus/v3/task.json` 只是静态导出产物，修改它不会自动同步到数据库
 - 通过 CLI（`run.py`）或 Dashboard 操作状态，**禁止直接改 task.json 的运行时字段**
 - 子 Agent 完成后必须在工作区写 `zeus-result.json`，Worker 自动同步到数据库
+- **Dispatcher 模式**：`config.json` 中 `subagent.dispatcher` 控制任务如何执行
+  - `auto`（默认）— 自动检测 kimi/claude CLI，找不到时降级 mock 并报警告
+  - `human` — 不自动执行，标记 task 为 pending，等人手动 `--finalize`
+  - `mock` — 测试用，伪造完成结果
+  - `kimi`/`claude` — 强制使用指定 CLI
 
 ### 6.3 验证原则
 

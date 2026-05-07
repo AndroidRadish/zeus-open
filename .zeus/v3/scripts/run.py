@@ -163,7 +163,6 @@ async def main(argv: list[str] | None = None) -> int:
 
     # 2a. Dispatch / finalize / dispatch-list / wave-advance — no import needed
     if args.dispatch or args.finalize or args.dispatch_list or args.wave_advance is not None:
-        from workspace import build_workspace_manager
         worker_id = args.worker_id or "zeus-dispatch"
 
         if args.dispatch_list:
