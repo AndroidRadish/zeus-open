@@ -24,11 +24,9 @@ from config import ZeusConfig
 from core.scheduler import ZeusScheduler
 from core.tracing import init_tracing
 from core.worker_pool import WorkerPool
-from db.engine import make_async_engine
-from db.models import Base
 from dispatcher.cli import build_dispatcher
 from importer import import_tasks_from_json
-from store.sqlite_store import SQLiteStateStore
+from store.json_store import JsonStateStore
 from task_queue.memory_queue import MemoryTaskQueue
 from task_queue.sqlite_queue import SqliteTaskQueue
 from workspace import build_workspace_manager
@@ -39,7 +37,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--project-root", default=".", help="Project root directory")
     parser.add_argument("--version", default="v3", help="Zeus version folder")
     parser.add_argument("--max-workers", type=int, default=3, help="Max concurrent workers")
-    parser.add_argument("--database-url", default=None, help="SQLAlchemy async DB URL")
+    parser.add_argument("--database-url", default=None, help="(deprecated — no-op, JSON store doesn't need a DB URL)")
     parser.add_argument("--queue-backend", default="memory", choices=["memory", "sqlite", "redis"], help="Task queue backend")
     parser.add_argument("--redis-url", default=None, help="Redis URL (required if queue-backend=redis)")
     parser.add_argument("--dispatcher", default=None, choices=["mock", "kimi", "claude", "auto"], help="Override dispatcher mode")
@@ -62,7 +60,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-async def _print_status(store: SQLiteStateStore) -> None:
+async def _print_status(store: JsonStateStore) -> None:
     """Print human-readable project status from the DB."""
     tasks = await store.list_tasks()
     total = len(tasks)
@@ -99,13 +97,6 @@ async def _print_status(store: SQLiteStateStore) -> None:
     print()
 
 
-async def ensure_schema(database_url: str) -> None:
-    engine = make_async_engine(database_url)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    await engine.dispose()
-
-
 async def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     project_root = Path(args.project_root).resolve()
@@ -116,10 +107,6 @@ async def main(argv: list[str] | None = None) -> int:
         from init_project import init_project
         framework_root = Path(__file__).resolve().parent.parent.parent.parent
         created = init_project(project_root, framework_root, force=False)
-        # Ensure state.db schema is created so the project is fully bootstrapped
-        database_url = args.database_url or f"sqlite+aiosqlite:///{project_root / '.zeus' / version / 'state.db'}"
-        await ensure_schema(database_url)
-        created.append(str(project_root / ".zeus" / version / "state.db"))
         print(f"[INIT] Project initialized at {project_root}")
         for c in created:
             print(f"  + {c}")
@@ -146,20 +133,22 @@ async def main(argv: list[str] | None = None) -> int:
             print(f"[WARN] Detected project root is {auto_root}")
             print(f"[INFO] To avoid loading the wrong project, cd into the project root or use --project-root")
 
-    database_url = args.database_url or f"sqlite+aiosqlite:///{project_root / '.zeus' / version / 'state.db'}"
     tracer = init_tracing(export_to_console=args.trace)
     print(">> ZeusOpen v3 Runner")
     print(f"   Project : {project_root}")
     print(f"   Version : {version}")
-    print(f"   DB      : {database_url}")
     print(f"   Workers : {args.max_workers}")
     print(f"   Queue   : {args.queue_backend}")
 
-    # 1. Ensure schema
-    await ensure_schema(database_url)
+    # Create JSON-backed store
+    store = JsonStateStore(project_root, version)
 
-    # 2. Create store
-    store = SQLiteStateStore(database_url)
+    # Import tasks from task.json (idempotent — JSON store just upserts)
+    if task_json_path.exists():
+        await import_tasks_from_json(store, task_json_path)
+
+    # Read existing tasks (may be empty on first run after task.json import)
+    existing_tasks = await store.list_tasks()
 
     # 2a. Dispatch / finalize / dispatch-list / wave-advance — no import needed
     if args.dispatch or args.finalize or args.dispatch_list or args.wave_advance is not None:
@@ -236,8 +225,6 @@ async def main(argv: list[str] | None = None) -> int:
             await store.close()
             return 0
 
-    # 2b. Import tasks (skip auto-import in serve mode to preserve runtime state)
-
     if args.status:
         await _print_status(store)
         await store.close()
@@ -251,36 +238,11 @@ async def main(argv: list[str] | None = None) -> int:
         print(f"         written to {result['output_path']}")
         return 0
 
-    # Import tasks from task.json if it exists (cold-start or explicit request)
-    existing_tasks = await store.list_tasks()
-    if task_json_path.exists():
-        if args.mode == "serve" and not existing_tasks:
-            import_result = await import_tasks_from_json(store, task_json_path)
-            print(f"[SERVE] Cold-start auto-import: {import_result['imported_tasks']} tasks imported")
-        elif args.mode != "serve":
-            import_result = await import_tasks_from_json(store, task_json_path)
-            print(f"[IMPORT] Imported {import_result['imported_tasks']} tasks, "
-                  f"{import_result['quarantine_count']} quarantined, "
-                  f"meta keys: {import_result['meta_keys']}")
-
-            if args.import_only:
-                await store.close()
-                print("[OK] Import complete.")
-                return 0
-        else:
-            import_result = {"imported_tasks": 0, "quarantine_count": 0, "meta_keys": []}
-    else:
-        if not existing_tasks and args.mode != "serve":
-            print("[WARN] No task.json found and DB is empty. Nothing to run.")
-            await store.close()
-            return 0
-        import_result = {"imported_tasks": 0, "quarantine_count": 0, "meta_keys": []}
-
     # 3. API server mode
     if args.mode == "serve":
         from api.control_plane import ControlPlane
         bus = EventBus()
-        control_plane = ControlPlane(store, bus, project_root, database_url)
+        control_plane = ControlPlane(store, bus, project_root)
         embedded = None
         if args.embedded_scheduler and not args.no_embedded_scheduler:
             config_obj = ZeusConfig(project_root, version)

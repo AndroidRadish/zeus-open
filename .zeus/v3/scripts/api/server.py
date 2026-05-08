@@ -24,9 +24,7 @@ from api.control_plane import ControlPlane
 from api.metrics_routes import register_metrics_routes
 from api.workflow_graph import WorkflowGraph
 from core.recovery import recover_running_tasks
-from db.engine import make_async_engine
-from db.models import Base
-from store.sqlite_store import SQLiteStateStore
+from store.json_store import JsonStateStore
 
 
 class ScaleWorkersRequest(BaseModel):
@@ -34,7 +32,7 @@ class ScaleWorkersRequest(BaseModel):
 
 
 def create_app(
-    store: SQLiteStateStore,
+    store: JsonStateStore,
     bus: EventBus | None = None,
     control_plane: ControlPlane | None = None,
     embedded_runner: dict[str, Any] | None = None,
@@ -342,15 +340,13 @@ def create_app(
         if task and task.get("ai_log_ref"):
             ref = task["ai_log_ref"]
             log_path = pathlib.Path(request.app.state.project_root) / ref if request.app.state.project_root else None
-            if log_path is None or not log_path.exists():
-                # Fallback: derive project root from the database file path
-                db_url = getattr(store, "database_url", None) or ""
-                if "sqlite+aiosqlite:///" in db_url:
-                    db_path = db_url.split("sqlite+aiosqlite:///", 1)[1].split("?")[0]
-                    db_root = pathlib.Path(db_path).resolve().parent.parent.parent
-                    log_path = db_root / ref
             if log_path and log_path.exists():
                 return PlainTextResponse(log_path.read_text("utf-8"))
+            # Also try standard ai-logs path as fallback
+            if request.app.state.project_root:
+                log_path = pathlib.Path(request.app.state.project_root) / ".zeus" / "v3" / "ai-logs" / f"{task_id}.md"
+                if log_path.exists():
+                    return PlainTextResponse(log_path.read_text("utf-8"))
 
         # Priority 2: activity.md in workspace (legacy)
         workspace_path = None
@@ -912,15 +908,13 @@ def create_app(
     async def control_project_switch(request: FastAPIRequest, body: dict[str, Any]) -> dict[str, Any]:
         _ensure_control_plane(request)
         from importer import import_tasks_from_json
-        from store.sqlite_store import SQLiteStateStore
+        from store.json_store import JsonStateStore
         new_root = pathlib.Path(body.get("project_root", ".")).resolve()
         version = body.get("version", "v3")
         task_json = new_root / ".zeus" / version / "task.json"
         if not task_json.exists():
             raise HTTPException(status_code=400, detail="task.json not found in target project")
-        new_db = f"sqlite+aiosqlite:///{new_root / '.zeus' / version / 'state.db'}"
-        await ensure_schema(new_db)
-        new_store = SQLiteStateStore(new_db)
+        new_store = JsonStateStore(new_root, version)
         import_result = await import_tasks_from_json(new_store, task_json)
         old_store = request.app.state.store
         request.app.state.store = new_store
@@ -960,13 +954,6 @@ def _auto_detect_project_root(fallback: pathlib.Path, version: str = "v3") -> pa
     return fallback
 
 
-async def ensure_schema(database_url: str) -> None:
-    engine = make_async_engine(database_url)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    await engine.dispose()
-
-
 def main(argv: list[str] | None = None) -> FastAPI:
     args = parse_args(argv)
     project_root = pathlib.Path(args.project_root).resolve()
@@ -975,23 +962,13 @@ def main(argv: list[str] | None = None) -> FastAPI:
     if not (project_root / ".zeus" / version / "config.json").exists():
         project_root = _auto_detect_project_root(project_root, version)
 
-    if not args.database_url:
-        db_file = project_root / ".zeus" / version / "state.db"
-        db_file.parent.mkdir(parents=True, exist_ok=True)
-        database_url = f"sqlite+aiosqlite:///{db_file}"
-    else:
-        database_url = args.database_url
-
-    import asyncio
-    asyncio.run(ensure_schema(database_url))
-
-    store = SQLiteStateStore(database_url)
+    store = JsonStateStore(project_root, version)
     bus = EventBus()
 
     control_plane = None
     if os.environ.get("ZEUS_CONTROL_PLANE_ENABLED", "true").lower() != "false":
         from api.control_plane import ControlPlane
-        control_plane = ControlPlane(store, bus, project_root, database_url)
+        control_plane = ControlPlane(store, bus, project_root)
 
     embedded_runner = None
     if os.environ.get("ZEUS_EMBEDDED_SCHEDULER", "true").lower() != "false":

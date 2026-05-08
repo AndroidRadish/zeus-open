@@ -15,7 +15,7 @@ from typing import Any
 from api.bus import EventBus
 from core.scheduler import ZeusScheduler
 from importer import import_tasks_from_json
-from store.sqlite_store import SQLiteStateStore
+from store.json_store import JsonStateStore
 from task_queue.memory_queue import MemoryTaskQueue
 
 
@@ -24,15 +24,13 @@ class ControlPlane:
 
     def __init__(
         self,
-        store: SQLiteStateStore,
+        store: JsonStateStore,
         bus: EventBus,
         project_root: Path,
-        database_url: str,
     ) -> None:
         self.store = store
         self.bus = bus
         self.project_root = project_root
-        self.database_url = database_url
 
     async def spawn_scheduler(self) -> int:
         target = await self.store.get_meta("scheduler_target_state", "stopped")
