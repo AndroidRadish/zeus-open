@@ -126,7 +126,11 @@ class ZeusWorker:
                                 pass
 
             heartbeat_task = asyncio.create_task(_heartbeat_loop())
-            raw_result = await self.dispatcher.run(task, workspace, prompt, bus=self.bus)
+            timeout = task.get("timeout_seconds", 3600)
+            raw_result = await asyncio.wait_for(
+                self.dispatcher.run(task, workspace, prompt, bus=self.bus),
+                timeout=timeout,
+            )
         except Exception as exc:
             await _end_run("failed", str(exc)[:200])
             await self.store.log_event(
@@ -228,7 +232,6 @@ class ZeusWorker:
                 await self.store.update_task_status(tid, "completed", ai_log_ref=ai_log_ref)
         else:
             await _end_run("failed", validated.artifacts.get("error", "partial_or_failed")[:200])
-            await self.store.update_task_status(tid, "failed", passes=False)
             await self.store.update_task_status(tid, "failed", passes=False, worker_id=None)
             await self.store.log_event(
                 event_type="task.failed",

@@ -45,6 +45,31 @@ async def import_tasks_from_json(store: AsyncStateStore, task_json_path: Path | 
     quarantine = data.get("quarantine", [])
     meta = data.get("meta", {})
 
+    # DAG cycle detection via Kahn's algorithm
+    graph: dict[str, list[str]] = {t["id"]: t.get("depends_on", []) or [] for t in tasks}
+    in_degree: dict[str, int] = {tid: 0 for tid in graph}
+    for tid, deps in graph.items():
+        for d in deps:
+            if d not in in_degree:
+                continue  # dependency references unknown task — will be caught below
+            in_degree[d] = in_degree.get(d, 0) + 1
+    queue_list: list[str] = [tid for tid, deg in in_degree.items() if deg == 0]
+    sorted_count = 0
+    while queue_list:
+        tid = queue_list.pop(0)
+        sorted_count += 1
+        for dep_id in graph.get(tid, []):
+            in_degree[dep_id] -= 1
+            if in_degree[dep_id] == 0:
+                queue_list.append(dep_id)
+    if sorted_count != len(graph):
+        missing = sorted(set(graph.keys()) - {tid for tid in graph if tid in in_degree}) if sorted_count < len(graph) else []
+        cycle_tasks = [tid for tid, deg in in_degree.items() if deg > 0]
+        msg = f"DAG cycle detected: {', '.join(cycle_tasks[:10])}"
+        if len(cycle_tasks) > 10:
+            msg += f" and {len(cycle_tasks) - 10} more"
+        raise ValueError(msg)
+
     imported = 0
     for t in tasks:
         tid = t["id"]

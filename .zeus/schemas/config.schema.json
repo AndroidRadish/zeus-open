@@ -26,9 +26,9 @@
       "properties": {
         "dispatcher": {
           "type": "string",
-          "enum": ["auto", "local", "docker"],
+          "enum": ["auto", "kimi", "claude", "mock", "human", "docker"],
           "default": "auto",
-          "description": "子 Agent 调度方式"
+          "description": "子 Agent 调度方式 (auto/kimi/claude/mock/human/docker)"
         }
       }
     },
