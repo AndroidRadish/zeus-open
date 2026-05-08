@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from core.ai_logger import generate_ai_log
+from exporter import auto_export_task_json
 from schemas.zeus_result import ZeusResult
 from store.base import AsyncStateStore
 from workspace.base import BaseWorkspaceManager
@@ -207,6 +208,9 @@ async def finalize_task(
 
     # Auto-advance current_wave if this task was the last in its wave
     advanced_to = await _advance_wave_if_done(store, task)
+
+    # Auto-export back to task.json so task.json is always in sync
+    await auto_export_task_json(store, workspace_manager.project_root)
 
     return {
         "ok": True,

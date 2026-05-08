@@ -54,6 +54,8 @@ class WorkspaceManager(BaseWorkspaceManager):
                 ".env",
                 "*.log",
                 "*.pid",
+                "target",
+                ".gitignore",
             )
             shutil.copytree(self.project_root, workspace, dirs_exist_ok=True, ignore=ignore)
             subprocess.run(

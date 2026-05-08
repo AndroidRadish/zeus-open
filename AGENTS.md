@@ -162,16 +162,16 @@ python .zeus/scripts/zeus_runner.py --status
 
 ### 6.1 开工前
 
-1. **只看 state.db，不看 task.json** — `python .zeus/v3/scripts/run.py --status`
+1. **读 task.json** — `task.json` 现在始终与运行时状态同步。每次 task 执行后自动回写，`git diff` 可以看到所有状态变更。
 2. 如果状态异常，先修复再继续
 3. **一次只做一个 task**
 
 ### 6.2 v3 状态管理规则
 
-- `.zeus/v3/state.db` 是唯一事实来源（task status、passes、commit_sha）
-- `.zeus/v3/task.json` 只是静态导出产物，修改它不会自动同步到数据库
-- 通过 CLI（`run.py`）或 Dashboard 操作状态，**禁止直接改 task.json 的运行时字段**
-- 子 Agent 完成后必须在工作区写 `zeus-result.json`，Worker 自动同步到数据库
+- **双重保障**：启动引擎（`run.py`）时，`state.db` 是运行时事实源。不跑引擎时，`task.json` 始终是最新的 diff 友好快照。
+- 每次 task 执行完毕或 `--finalize` 完成后，引擎自动将运行时状态回写到 `task.json`。无需手动 `--export`。
+- **允许直接改 task.json** 的运行时字段（status/passes/commit_sha）——改完后下次跑引擎会用 importer 重新同步。
+- 子 Agent 完成后必须在工作区写 `zeus-result.json`，Worker 自动同步到数据库和 task.json。
 - **Dispatcher 模式**：`config.json` 中 `subagent.dispatcher` 控制任务如何执行
   - `auto`（默认）— 自动检测 kimi/claude CLI，找不到时降级 mock 并报警告
   - `human` — 不自动执行，标记 task 为 pending，等人手动 `--finalize`
@@ -243,7 +243,7 @@ python .zeus/v3/scripts/run.py --dispatch-list
 - [ ] 目标行为已实现
 - [ ] 相关验证已通过（见 §6.3）
 - [ ] Lint / 类型检查无错误（如有配置）
-- [ ] `state.db` 已同步（`run.py --status` 确认 task 为 completed）
+- [ ] task.json 已同步（手动将 status 改为 completed，或跑 `--finalize` 自动回写）
 - [ ] diff 自检通过（每一行改动都能追溯到当前 task）
 - [ ] 已 `git commit`（格式：`feat(T-001): description`）（如有 git）
 

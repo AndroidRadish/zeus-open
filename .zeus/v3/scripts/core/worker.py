@@ -13,6 +13,7 @@ from typing import Any, Awaitable, Callable
 
 from core.ai_logger import generate_ai_log
 from dispatcher.base import SubagentDispatcher
+from exporter import auto_export_task_json
 from schemas.zeus_result import ZeusResult
 from store.base import AsyncStateStore
 from task_queue.base import TaskQueue
@@ -162,6 +163,7 @@ class ZeusWorker:
                     await heartbeat_task
                 except asyncio.CancelledError:
                     pass
+            await auto_export_task_json(self.store, self.workspace_manager.project_root)
 
         # Primary source of truth: zeus-result.json in workspace
         zeus_result = self._read_zeus_result(workspace)

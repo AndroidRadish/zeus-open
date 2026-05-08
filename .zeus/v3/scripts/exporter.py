@@ -30,3 +30,15 @@ async def export_plan_to_file(
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
     return {"output_path": str(path), "task_count": len(data.get("tasks", [])),
             "phase_count": len(data.get("phases", [])), "milestone_count": len(data.get("milestones", []))}
+
+
+async def auto_export_task_json(store: AsyncStateStore, project_root: Path, version: str = "v3") -> None:
+    """Auto-export runtime state back to task.json after task completion.
+
+    Makes task.json the canonical diff-friendly view of project state.
+    Safe to call after every task completion/failure — fast and idempotent.
+    """
+    task_json_path = project_root / ".zeus" / version / "task.json"
+    if not task_json_path.exists():
+        return
+    await export_plan_to_file(store, task_json_path, include_runtime=True)
